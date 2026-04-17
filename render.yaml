@@ -1,0 +1,19 @@
+# Blueprint Render: crie um banco Postgres no painel, copie DATABASE_URL nas env vars do serviço web.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: dinamica-kr
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: PUBLIC_URL
+        sync: false

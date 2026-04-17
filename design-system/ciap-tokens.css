@@ -1,0 +1,106 @@
+:root {
+  /* Spacing (8pt-ish scale) */
+  --ciap-space-1: 4px;
+  --ciap-space-2: 8px;
+  --ciap-space-3: 12px;
+  --ciap-space-4: 16px;
+  --ciap-space-5: 20px;
+  --ciap-space-6: 24px;
+  --ciap-space-7: 32px;
+  --ciap-space-8: 40px;
+  --ciap-space-9: 48px;
+  --ciap-space-10: 64px;
+
+  /* Radius */
+  --ciap-radius-sm: 6px;
+  --ciap-radius-md: 8px;
+  --ciap-radius-lg: 12px;
+  --ciap-radius-xl: 16px;
+
+  /* Typography */
+  --ciap-font-xs: 11px;
+  --ciap-font-sm: 12px;
+  --ciap-font-base: 13px;
+  --ciap-font-md: 14px;
+  --ciap-font-lg: 16px;
+  --ciap-font-xl: 18px;
+  --ciap-font-2xl: 24px;
+  --ciap-font-3xl: 28px;
+
+  /* Motion */
+  --ciap-transition-fast: 0.15s ease;
+  --ciap-transition-base: 0.2s ease;
+  --ciap-transition-slow: 0.3s ease;
+  --ciap-transition-spring: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Duracoes alinhadas aos presets Framer Motion do CIAP (segundos) */
+  --ciap-motion-instant: 0.15s;
+  --ciap-motion-fast: 0.18s;
+  --ciap-motion-base: 0.2s;
+  --ciap-motion-medium: 0.25s;
+  --ciap-motion-relaxed: 0.3s;
+  --ciap-motion-slow: 0.4s;
+  --ciap-motion-slower: 0.5s;
+  --ciap-motion-stagger-step: 0.1s;
+
+  /* Easing (cubic-bezier) — espelho de ciap-motion.ts / Material */
+  --ciap-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ciap-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ciap-theme-light {
+  --ciap-bg-primary: #ffffff;
+  --ciap-bg-secondary: #fafafa;
+  --ciap-bg-tertiary: #f4f4f5;
+  --ciap-bg-elevated: #ffffff;
+  --ciap-text-primary: #18181b;
+  --ciap-text-secondary: #71717a;
+  --ciap-text-tertiary: #a1a1aa;
+  --ciap-accent: #7c3aed;
+  --ciap-accent-light: #8b5cf6;
+  --ciap-accent-subtle: rgba(124, 58, 237, 0.08);
+  --ciap-border: #e4e4e7;
+  --ciap-border-subtle: #f4f4f5;
+  --ciap-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ciap-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --ciap-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --ciap-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
+  --ciap-overlay: rgba(0, 0, 0, 0.4);
+}
+
+.ciap-theme-dark {
+  --ciap-bg-primary: #09090b;
+  --ciap-bg-secondary: #18181b;
+  --ciap-bg-tertiary: #27272a;
+  --ciap-bg-elevated: #1f1f23;
+  --ciap-text-primary: #fafafa;
+  --ciap-text-secondary: #a1a1aa;
+  --ciap-text-tertiary: #71717a;
+  --ciap-accent: #8b5cf6;
+  --ciap-accent-light: #a78bfa;
+  --ciap-accent-subtle: rgba(139, 92, 246, 0.15);
+  --ciap-border: #27272a;
+  --ciap-border-subtle: #1f1f23;
+  --ciap-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --ciap-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --ciap-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --ciap-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --ciap-overlay: rgba(0, 0, 0, 0.7);
+}
+
+:root {
+  /* Status palette */
+  --ciap-status-executing: #6b46c1;
+  --ciap-status-paused: #f59e0b;
+  --ciap-status-completed: #10b981;
+  --ciap-status-postponed: #8b5cf6;
+  --ciap-status-dismissed: #6b7280;
+  --ciap-status-inaccessible: #dc2626;
+  --ciap-status-waiting: #3b82f6;
+
+  /* Methodology phase palette */
+  --ciap-phase-escopo: #6b46c1;
+  --ciap-phase-metodo: #f59e0b;
+  --ciap-phase-imersao: #10b981;
+  --ciap-phase-sintese: #3b82f6;
+}

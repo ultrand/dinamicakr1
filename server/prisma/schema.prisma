@@ -1,0 +1,132 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Study {
+  id        String         @id @default(cuid())
+  name      String
+  createdAt DateTime       @default(now())
+  versions  StudyVersion[]
+}
+
+model StudyVersion {
+  id          String   @id @default(cuid())
+  studyId     String
+  study       Study    @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  number      Int
+  isDraft     Boolean  @default(false)
+  publishedAt DateTime?
+  tasks       Task[]
+  questions   Question[]
+  responses   Response[]
+
+  @@index([studyId, isDraft])
+  @@index([studyId, number])
+}
+
+model Task {
+  id               String   @id @default(cuid())
+  studyVersionId   String
+  studyVersion     StudyVersion @relation(fields: [studyVersionId], references: [id], onDelete: Cascade)
+  verb             String
+  textoPrincipal   String
+  atividade        String   @default("")
+  etapa            String   @default("")
+  inactive         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  criticalSelections CriticalSelection[]
+  criticalDifficulty CriticalDifficulty[]
+  pathSteps          PathStep[]
+
+  @@index([studyVersionId])
+  @@index([studyVersionId, inactive])
+}
+
+model Question {
+  id             String   @id @default(cuid())
+  studyVersionId String
+  studyVersion   StudyVersion @relation(fields: [studyVersionId], references: [id], onDelete: Cascade)
+  sortOrder      Int
+  type           String
+  title          String
+  helpText       String   @default("")
+  required       Boolean  @default(true)
+
+  conceptualAnswers ConceptualDifficulty[]
+
+  @@index([studyVersionId])
+}
+
+model Response {
+  id               String   @id @default(cuid())
+  studyVersionId   String
+  studyVersion     StudyVersion @relation(fields: [studyVersionId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+
+  criticalSelections   CriticalSelection[]
+  criticalDifficulty   CriticalDifficulty?
+  conceptualDifficulties ConceptualDifficulty[]
+  paths                Path[]
+}
+
+model CriticalSelection {
+  id          String   @id @default(cuid())
+  responseId  String
+  response    Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Restrict)
+
+  @@index([responseId])
+  @@index([taskId])
+}
+
+model CriticalDifficulty {
+  id         String   @id @default(cuid())
+  responseId String   @unique
+  response   Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  whyText    String
+}
+
+model ConceptualDifficulty {
+  id          String   @id @default(cuid())
+  responseId String
+  response    Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text        String
+
+  @@index([responseId])
+  @@index([questionId])
+}
+
+model Path {
+  id               String   @id @default(cuid())
+  responseId       String
+  response         Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  criticalTaskId   String
+  steps            PathStep[]
+
+  @@index([responseId])
+  @@index([criticalTaskId])
+}
+
+model PathStep {
+  id        String @id @default(cuid())
+  pathId    String
+  path      Path   @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  stepIndex Int
+  taskId    String
+  task      Task   @relation(fields: [taskId], references: [id], onDelete: Restrict)
+
+  @@unique([pathId, stepIndex])
+  @@index([taskId])
+}

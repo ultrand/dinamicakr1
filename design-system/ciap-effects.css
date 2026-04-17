@@ -1,0 +1,92 @@
+/**
+ * Efeitos globais extraidos do CIAP (keyframes, scrollbar, inputs).
+ * Importe depois de `ciap-tokens.css` para ter acesso as variaveis de tema.
+ */
+
+@keyframes ciap-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes ciap-breathing {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px rgba(124, 58, 237, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.7));
+  }
+}
+
+@keyframes ciap-chevron-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.ciap-animate-pulse {
+  animation: ciap-pulse 2s ease-in-out infinite;
+}
+
+.ciap-animate-breathing {
+  animation: ciap-breathing 2.5s ease-in-out infinite;
+}
+
+.ciap-animate-chevron-bounce {
+  animation: ciap-chevron-bounce 1.2s ease-in-out infinite;
+}
+
+/* Scrollbar (WebKit) — alinhado ao monolito */
+.ciap-scrollable::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ciap-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ciap-scrollable::-webkit-scrollbar-thumb {
+  background: var(--ciap-border);
+  border-radius: 3px;
+}
+
+.ciap-scrollable::-webkit-scrollbar-thumb:hover {
+  background: var(--ciap-text-tertiary);
+}
+
+/* Campo de busca / input — focus ring CIAP */
+.ciap-input {
+  width: 100%;
+  padding: var(--ciap-space-2) var(--ciap-space-4) var(--ciap-space-2) var(--ciap-space-8);
+  background: var(--ciap-bg-secondary);
+  border: 1px solid var(--ciap-border);
+  border-radius: var(--ciap-radius-md);
+  color: var(--ciap-text-primary);
+  font-family: inherit;
+  font-size: var(--ciap-font-base);
+  transition: border-color var(--ciap-transition-base), box-shadow var(--ciap-transition-base),
+    background var(--ciap-transition-base);
+}
+
+.ciap-input::placeholder {
+  color: var(--ciap-text-tertiary);
+}
+
+.ciap-input:focus {
+  outline: none;
+  border-color: var(--ciap-accent);
+  background: var(--ciap-bg-primary);
+  box-shadow: 0 0 0 3px var(--ciap-accent-subtle);
+}

@@ -1,0 +1,110 @@
+.ciap-surface {
+  background: var(--ciap-bg-primary);
+  color: var(--ciap-text-primary);
+}
+
+.ciap-icon-button {
+  min-width: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--ciap-radius-md);
+  color: var(--ciap-text-secondary);
+  cursor: pointer;
+  transition: all var(--ciap-transition-base);
+}
+
+.ciap-icon-button:hover:not(:disabled) {
+  background: var(--ciap-accent-subtle);
+  color: var(--ciap-accent);
+}
+
+.ciap-icon-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.ciap-icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ciap-button-primary {
+  height: 40px;
+  padding: 0 var(--ciap-space-5);
+  border: none;
+  border-radius: var(--ciap-radius-md);
+  font-size: var(--ciap-font-sm);
+  font-weight: 600;
+  background: var(--ciap-accent);
+  color: #fff;
+  cursor: pointer;
+  transition: all var(--ciap-transition-base);
+}
+
+.ciap-button-primary:hover:not(:disabled) {
+  background: var(--ciap-accent-light);
+  transform: translateY(-1px);
+  box-shadow: var(--ciap-shadow-md);
+}
+
+.ciap-button-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ciap-button-status-executing {
+  background: var(--ciap-status-inaccessible);
+}
+
+.ciap-button-status-paused {
+  background: var(--ciap-status-paused);
+}
+
+.ciap-card {
+  background: var(--ciap-bg-primary);
+  border: 1px solid var(--ciap-border);
+  border-radius: var(--ciap-radius-lg);
+  padding: var(--ciap-space-5);
+  transition: all var(--ciap-transition-base);
+}
+
+.ciap-card:hover {
+  border-color: var(--ciap-accent);
+  box-shadow: var(--ciap-shadow-md);
+}
+
+.ciap-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 var(--ciap-space-3);
+  border-radius: 999px;
+  font-size: var(--ciap-font-sm);
+  font-weight: 500;
+  background: var(--ciap-bg-tertiary);
+  color: var(--ciap-text-secondary);
+  border: 1px solid var(--ciap-border);
+}
+
+.ciap-badge-accent {
+  background: var(--ciap-accent-subtle);
+  color: var(--ciap-accent);
+  border-color: rgba(107, 70, 193, 0.2);
+}
+
+.ciap-progress {
+  width: 100%;
+  height: 4px;
+  background: var(--ciap-bg-tertiary);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ciap-progress__fill {
+  height: 100%;
+  background: var(--ciap-accent);
+  border-radius: inherit;
+  transition: width var(--ciap-transition-slow);
+}

@@ -1,0 +1,221 @@
+import { Router } from "express";
+import { prisma } from "../lib/prisma.js";
+import { getLatestPublishedVersion, getOrCreateStudy } from "../services/studyService.js";
+
+export const publicRouter = Router();
+
+publicRouter.get("/version", async (_req, res) => {
+  try {
+    const study = await getOrCreateStudy();
+    const v = await getLatestPublishedVersion(study.id);
+    if (!v) {
+      res.json({ studyId: study.id, version: null });
+      return;
+    }
+    const full = await prisma.studyVersion.findUnique({
+      where: { id: v.id },
+      include: {
+        tasks: {
+          where: { inactive: false },
+          orderBy: { textoPrincipal: "asc" },
+        },
+        questions: { orderBy: { sortOrder: "asc" } },
+      },
+    });
+    res.json({ studyId: study.id, version: full });
+  } catch (e) {
+    console.error(e);
+    const dev = process.env.NODE_ENV !== "production";
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({
+      error: "Falha ao carregar versão",
+      ...(dev ? { details: msg } : {}),
+    });
+  }
+});
+
+type AnswerIn = {
+  questionId: string;
+  criticalTaskIds?: string[];
+  taskId?: string;
+  why?: string;
+  text?: string;
+  flows?: { criticalTaskId: string; stepTaskIds: string[] }[];
+};
+
+publicRouter.post("/responses", async (req, res) => {
+  try {
+    const { studyVersionId, answers } = req.body as {
+      studyVersionId: string;
+      answers: AnswerIn[];
+    };
+    if (!studyVersionId || !Array.isArray(answers)) {
+      res.status(400).json({ error: "Payload inválido" });
+      return;
+    }
+
+    const qids = answers.map((a) => a.questionId);
+    if (new Set(qids).size !== qids.length) {
+      res.status(400).json({ error: "questionId duplicado nas respostas" });
+      return;
+    }
+
+    const version = await prisma.studyVersion.findFirst({
+      where: { id: studyVersionId, isDraft: false },
+    });
+    if (!version) {
+      res.status(400).json({ error: "Versão não publicada ou inexistente" });
+      return;
+    }
+
+    const questions = await prisma.question.findMany({
+      where: { studyVersionId },
+      orderBy: { sortOrder: "asc" },
+    });
+    const qMap = new Map(questions.map((q) => [q.id, q]));
+
+    const taskIds = new Set(
+      (await prisma.task.findMany({ where: { studyVersionId }, select: { id: true } })).map((t) => t.id),
+    );
+
+    for (const q of questions) {
+      if (!q.required) continue;
+      const a = answers.find((x) => x.questionId === q.id);
+      if (!a) {
+        res.status(400).json({ error: `Resposta obrigatória ausente: ${q.title}` });
+        return;
+      }
+      if (q.type === "critical_select") {
+        if (!a.criticalTaskIds?.length) {
+          res.status(400).json({ error: "Selecione ao menos uma tarefa crítica" });
+          return;
+        }
+      }
+      if (q.type === "hardest_critical") {
+        if (!a.taskId || !(a.why ?? "").trim()) {
+          res.status(400).json({ error: "Preencha a tarefa mais difícil e o motivo" });
+          return;
+        }
+      }
+      if (q.type === "text_long") {
+        if (!(a.text ?? "").trim()) {
+          res.status(400).json({ error: "Texto obrigatório" });
+          return;
+        }
+      }
+      if (q.type === "flow_builder_per_critical") {
+        if (!a.flows?.length) {
+          res.status(400).json({ error: "Monte os fluxos para cada crítica" });
+          return;
+        }
+      }
+    }
+
+    const criticalQ = questions.find((q) => q.type === "critical_select");
+    const selected = answers.find((x) => x.questionId === criticalQ?.id)?.criticalTaskIds ?? [];
+    for (const tid of selected) {
+      if (!taskIds.has(tid)) {
+        res.status(400).json({ error: "Card inválido na seleção" });
+        return;
+      }
+    }
+
+    const selectedSet = new Set(selected);
+    const hardestQ = questions.find((q) => q.type === "hardest_critical");
+    const hardestAns = answers.find((x) => x.questionId === hardestQ?.id);
+    if (hardestAns?.taskId && !selectedSet.has(hardestAns.taskId)) {
+      res.status(400).json({ error: "A tarefa mais difícil deve estar entre as críticas selecionadas" });
+      return;
+    }
+
+    const flowQ = questions.find((q) => q.type === "flow_builder_per_critical");
+    const flowAns = answers.find((x) => x.questionId === flowQ?.id);
+    if (flowAns?.flows?.length) {
+      const flowCrits = new Set(flowAns.flows.map((f) => f.criticalTaskId));
+      for (const s of selected) {
+        if (!flowCrits.has(s)) {
+          res.status(400).json({ error: "Monte o fluxo para cada tarefa crítica selecionada" });
+          return;
+        }
+      }
+      for (const f of flowAns.flows) {
+        if (!selectedSet.has(f.criticalTaskId)) {
+          res.status(400).json({ error: "Fluxos só podem usar críticas selecionadas" });
+          return;
+        }
+      }
+    }
+
+    const response = await prisma.$transaction(async (tx) => {
+      const r = await tx.response.create({
+        data: { studyVersionId },
+      });
+
+      for (const a of answers) {
+        const q = qMap.get(a.questionId);
+        if (!q) continue;
+
+        if (q.type === "critical_select" && a.criticalTaskIds) {
+          for (const tid of a.criticalTaskIds) {
+            if (!taskIds.has(tid)) throw new Error("task");
+            await tx.criticalSelection.create({
+              data: { responseId: r.id, taskId: tid },
+            });
+          }
+        }
+
+        if (q.type === "hardest_critical" && a.taskId) {
+          if (!taskIds.has(a.taskId)) throw new Error("task");
+          await tx.criticalDifficulty.create({
+            data: {
+              responseId: r.id,
+              taskId: a.taskId,
+              whyText: (a.why ?? "").trim(),
+            },
+          });
+        }
+
+        if (q.type === "text_long") {
+          await tx.conceptualDifficulty.create({
+            data: {
+              responseId: r.id,
+              questionId: q.id,
+              text: (a.text ?? "").trim(),
+            },
+          });
+        }
+
+        if (q.type === "flow_builder_per_critical" && a.flows) {
+          for (const flow of a.flows) {
+            if (!taskIds.has(flow.criticalTaskId)) throw new Error("crit");
+            const path = await tx.path.create({
+              data: {
+                responseId: r.id,
+                criticalTaskId: flow.criticalTaskId,
+              },
+            });
+            for (const tid of flow.stepTaskIds) {
+              if (!taskIds.has(tid)) throw new Error("step");
+            }
+            for (let i = 0; i < flow.stepTaskIds.length; i++) {
+              await tx.pathStep.create({
+                data: {
+                  pathId: path.id,
+                  stepIndex: i,
+                  taskId: flow.stepTaskIds[i]!,
+                },
+              });
+            }
+          }
+        }
+      }
+
+      return r;
+    });
+
+    res.json({ id: response.id, ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Não foi possível salvar" });
+  }
+});

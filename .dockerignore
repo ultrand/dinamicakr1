@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.gitignore
+*.md
+.env
+**/.env
+server/dev.db
+**/*.db
+.cursor
+terminals
+npm-debug.log*

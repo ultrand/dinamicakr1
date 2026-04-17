@@ -1,0 +1,35 @@
+Assimilar expectativas de futuro do projeto	Instruções do Cliente	Condições do Trabalho
+Assimilar restrições e ou impedimentos do projeto	Instruções do Cliente	Condições do Trabalho
+Assimilar conflitos e sensibilidades políticas	Instruções do Cliente	Condições do Trabalho
+Conhecer visão estratégica e negócio	Instruções do Cliente	Condições do Trabalho
+Definir objetivos estratégicos do serviço-negócio	Orientações ao Cliente	Condições do Trabalho
+Definir objetivos do projeto para o serviço	Orientações ao Cliente	Condições do Trabalho
+Escrever objetivo geral de pesquisa	Orientações ao Cliente	Condições do Trabalho
+Escrever objetivos específicos da pesquisa	Orientações ao Cliente	Condições do Trabalho
+Escrever questão de pesquisa	Orientações ao Cliente	Condições do Trabalho
+Entender cenário do serviço	Orientações ao Cliente	Condições do Trabalho
+Determinar problema de projeto	Orientações ao Cliente	Condições do Trabalho
+Determinar classe de serviço	Orientações ao Cliente	Condições do Trabalho
+Assimilar perfis de pessoas envolvidas	Pessoas do Serviço	Entendimento Preparatório
+Mapear restrições do briefing	Pessoas do Serviço	Entendimento Preparatório
+Conjecturar hipóteses de ponto de partida	Pessoas do Serviço	Entendimento Preparatório
+Mapear pontos de contatos básicos	Modelo do Serviço	Entendimento Preparatório
+Mapear pontos funcionais de impacto	Modelo do Serviço	Entendimento Preparatório
+Mapear pontos disfuncionais de impacto	Modelo do Serviço	Entendimento Preparatório
+Associar principais tendências de mercado	Modelo do Serviço	Entendimento Preparatório
+Associar ameaças e riscos	Modelo do Serviço	Entendimento Preparatório
+Entender principais concorrentes	Modelo do Serviço	Entendimento Preparatório
+Entender segmentos análogos de valor	Modelo do Serviço	Entendimento Preparatório
+Entender relações com fornecedores	Modelo do Serviço	Entendimento Preparatório
+Mapear relevância da pesquisa	Direcionamento da Pesquisa	Definições Preliminares
+Mapear aspecto de originalidade	Direcionamento da Pesquisa	Definições Preliminares
+Definir natureza da pesquisa	Direcionamento da Pesquisa	Definições Preliminares
+Definir foco da pesquisa	Direcionamento da Pesquisa	Definições Preliminares
+Definir abordagem metodológica	Direcionamento da Pesquisa	Definições Preliminares
+Definir perspectivas de pesquisa	Direcionamento da Pesquisa	Definições Preliminares
+Escrever relevância da pesquisa	Direcionamento da Pesquisa	Definições Preliminares
+Escrever aspecto de originalidade	Direcionamento da Pesquisa	Definições Preliminares
+Definir prazo de entrega	Logística da Pesquisa	Definições Preliminares
+Definir cronograma e etapas	Logística da Pesquisa	Definições Preliminares
+Definir recursos disponíveis	Logística da Pesquisa	Definições Preliminares
+Definir agenda de atividades	Logística da Pesquisa	Definições Preliminares
