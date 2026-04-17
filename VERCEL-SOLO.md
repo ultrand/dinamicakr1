@@ -1,5 +1,7 @@
 # Só Vercel + Supabase (sem Railway, sem Docker Hub)
 
+**Checklist na ordem:** abra também **`PROXIMOS-PASSOS.md`** (GitHub + variáveis + testes).
+
 ## O que você precisa ter conta
 
 | Serviço | Para quê |
