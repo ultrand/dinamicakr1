@@ -31,9 +31,12 @@
 
 | Nome | Valor |
 |------|--------|
-| `DATABASE_URL` | A URI do Postgres do Supabase |
+| `DATABASE_URL` | No Supabase: URI com **connection pooling** (ex. porta **6543**), se o painel oferecer — melhor para a API serverless. |
+| `DIRECT_DATABASE_URL` | No Supabase: URI **Session** ou **Direct** (porta **5432**) — o Prisma usa isso só para **`migrate deploy`** no build. Sem isso, o build costuma falhar no passo das migrações. |
 | `ADMIN_TOKEN` | Uma senha forte (acesso ao `/admin`) |
 | `CORS_ORIGINS` | Pode deixar `*` no começo, ou colocar depois a URL do site, ex. `https://seu-app.vercel.app` |
+
+No **Supabase** → **Project Settings → Database** existem várias strings; copie uma para “pooler/transaction” (`DATABASE_URL`) e outra **direta** (`DIRECT_DATABASE_URL`). Se só tiver uma, pode repetir a mesma nas duas variáveis (menos ideal em produção, mas funciona).
 
 5. **Deploy**.
 
@@ -63,9 +66,10 @@ Só usaria `VITE_API_BASE` se um dia o front estivesse num domínio e a API em o
 
 ## Se o deploy falhar
 
-- **Erro no build com Prisma:** confira se `DATABASE_URL` está nas variáveis de ambiente da Vercel (Production e Preview, se usar preview).
-- **Erro de migração:** a URL precisa permitir criar tabelas (usuário `postgres` com permissão).
-- **502 nas rotas /api:** veja os logs da função na Vercel; às vezes falta `binaryTargets` do Prisma (já está no `schema.prisma`).
+- **Build parando em `prisma migrate deploy`:** crie na Vercel a variável **`DIRECT_DATABASE_URL`** com a URI **Direct** do Supabase (porta **5432**). Migrações não funcionam bem só com o **pooler** (6543).
+- **Erro no build com Prisma:** confira `DATABASE_URL` e `DIRECT_DATABASE_URL` em **Production** (e Preview, se usar).
+- **Log com commit antigo:** no GitHub confira se o `main` está atualizado e na Vercel faça **Redeploy** do último commit.
+- **502 nas rotas /api:** veja os logs da função na Vercel.
 
 ---
 
