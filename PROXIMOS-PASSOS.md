@@ -34,8 +34,9 @@ Guarde essa string — é o valor de `DATABASE_URL`.
 
 1. Acesse [vercel.com](https://vercel.com) → **Add New → Project**.
 2. **Import** o repositório do GitHub.
-3. Deixe as opções padrão — o `vercel.json` já define build e pasta de saída.
-4. Em **Environment Variables**, adicione (para **Production** e, se quiser, **Preview**):
+3. **Root Directory:** deixe **vazio** (raiz do monorepo). Se estiver `server`, apague — senão o build falha com “Missing script: vercel-build”.
+4. Deixe o resto padrão — o `vercel.json` já define build e pasta de saída.
+5. Em **Environment Variables**, adicione (para **Production** e, se quiser, **Preview**):
 
 | Nome | Valor |
 |------|--------|
@@ -43,7 +44,7 @@ Guarde essa string — é o valor de `DATABASE_URL`.
 | `ADMIN_TOKEN` | Uma senha longa e secreta (acesso `/admin`) |
 | `CORS_ORIGINS` | `*` no começo, ou depois `https://SEU-PROJETO.vercel.app` |
 
-5. **Deploy**.
+6. **Deploy**.
 
 ---
 

@@ -25,8 +25,9 @@
 ### 2) Vercel
 
 1. **Import project** → o repositório Git deste app.
-2. A Vercel usa o `vercel.json` (build do client + função em `api/index.ts`).
-3. Em **Settings → Environment Variables**, adicione pelo menos:
+2. **Root Directory:** deixe **vazio** ou **`.`** (raiz do repo). **Não** use `server` — o build quebra.
+3. A Vercel usa o `vercel.json` (build do client + função em `api/index.ts`).
+4. Em **Settings → Environment Variables**, adicione pelo menos:
 
 | Nome | Valor |
 |------|--------|
@@ -34,9 +35,9 @@
 | `ADMIN_TOKEN` | Uma senha forte (acesso ao `/admin`) |
 | `CORS_ORIGINS` | Pode deixar `*` no começo, ou colocar depois a URL do site, ex. `https://seu-app.vercel.app` |
 
-4. **Deploy**.
+5. **Deploy**.
 
-5. Depois do primeiro deploy, abra no navegador:
+6. Depois do primeiro deploy, abra no navegador:
    - `https://SEU-PROJETO.vercel.app/api/health` → deve aparecer JSON com `"ok": true`.
    - `https://SEU-PROJETO.vercel.app/` → participante.
    - `/admin` → painel (com o token que você definiu).

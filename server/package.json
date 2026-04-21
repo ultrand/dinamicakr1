@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "vercel-build": "node ../scripts/vercel-build.mjs",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "prisma migrate deploy && node dist/index.js",
