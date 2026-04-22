@@ -24,13 +24,9 @@ publicRouter.get("/version", async (_req, res) => {
     });
     res.json({ studyId: study.id, version: full });
   } catch (e) {
-    console.error(e);
-    const dev = process.env.NODE_ENV !== "production";
+    console.error("[/version error]", e);
     const msg = e instanceof Error ? e.message : String(e);
-    res.status(500).json({
-      error: "Falha ao carregar versão",
-      ...(dev ? { details: msg } : {}),
-    });
+    res.status(500).json({ error: "Falha ao carregar versão", details: msg });
   }
 });
 
