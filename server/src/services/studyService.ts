@@ -92,7 +92,7 @@ export async function publishDraft(studyId: string) {
     }
 
     return v;
-  });
+  }, { maxWait: 10_000, timeout: 60_000 });
 
   const publishedWith = await prisma.studyVersion.findUnique({
     where: { id: published.id },
@@ -144,7 +144,7 @@ export async function copyPublishedToDraft(studyId: string) {
         },
       });
     }
-  });
+  }, { maxWait: 10_000, timeout: 60_000 });
 
   return draft;
 }
