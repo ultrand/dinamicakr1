@@ -4,11 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  // Runtime: no Supabase na Vercel costuma ser o pooler (ex. :6543).
-  url       = env("DATABASE_URL")
-  // Migrações no build: conexão direta (Supabase “Direct”, ex. :5432).
-  directUrl = env("DIRECT_DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Study {

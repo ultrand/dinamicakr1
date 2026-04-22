@@ -77,8 +77,7 @@ O download aceita o token na query string (útil no navegador).
 
 | Variável        | Descrição                                      |
 |-----------------|------------------------------------------------|
-| `DATABASE_URL`  | URL Postgres (queries em runtime) |
-| `DIRECT_DATABASE_URL` | Mesma URL em dev local; na Vercel+Supabase use URI **direct** (5432) para migrações |
+| `DATABASE_URL`  | URL Postgres (Supabase na nuvem: prefira URI **Direct** 5432 na Vercel) |
 | `ADMIN_TOKEN`   | Token do painel admin                          |
 | `PORT`          | Porta da API (padrão `3001`)                   |
 | `CORS_ORIGINS`  | Origens permitidas (opcional; ver `DEPLOY.md`) |

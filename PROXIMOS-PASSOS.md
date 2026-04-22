@@ -40,8 +40,7 @@ Guarde essa string — é o valor de `DATABASE_URL`.
 
 | Nome | Valor |
 |------|--------|
-| `DATABASE_URL` | URI do Supabase (pooler **6543** se existir) |
-| `DIRECT_DATABASE_URL` | URI **direta** do Supabase (**5432**) — obrigatória para o Prisma aplicar migrações no build da Vercel |
+| `DATABASE_URL` | URI do Supabase (**Direct** / **Session**, porta **5432** — evite só *transaction pooler* 6543 se o migrate falhar) |
 | `ADMIN_TOKEN` | Uma senha longa e secreta (acesso `/admin`) |
 | `CORS_ORIGINS` | `*` no começo, ou depois `https://SEU-PROJETO.vercel.app` |
 

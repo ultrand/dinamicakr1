@@ -31,12 +31,11 @@
 
 | Nome | Valor |
 |------|--------|
-| `DATABASE_URL` | No Supabase: URI com **connection pooling** (ex. porta **6543**), se o painel oferecer — melhor para a API serverless. |
-| `DIRECT_DATABASE_URL` | (Opcional na Vercel) URI **Direct** **5432** para migrações. Se **não** criar, o build **copia** `DATABASE_URL` — então basta uma URI **direct** em `DATABASE_URL`, ou defina as duas se usar pooler + direct no Supabase. |
+| `DATABASE_URL` | Uma única URI do Supabase. Use a conexão **Direct** ou **Session** (porta **5432**) — é a que o Prisma usa no **build** (`migrate deploy`) e na API. Evite só o **Transaction pooler** (6543) se o migrate falhar. |
 | `ADMIN_TOKEN` | Uma senha forte (acesso ao `/admin`) |
 | `CORS_ORIGINS` | Pode deixar `*` no começo, ou colocar depois a URL do site, ex. `https://seu-app.vercel.app` |
 
-No **Supabase** → **Project Settings → Database** existem várias strings; copie uma para “pooler/transaction” (`DATABASE_URL`) e outra **direta** (`DIRECT_DATABASE_URL`). Se só tiver uma, pode repetir a mesma nas duas variáveis (menos ideal em produção, mas funciona).
+No **Supabase** → **Project Settings → Database** → copie a string **URI** da aba **Direct** (ou **Session**), não a do *Transaction pooler*, para `DATABASE_URL`.
 
 5. **Deploy**.
 
@@ -66,8 +65,8 @@ Só usaria `VITE_API_BASE` se um dia o front estivesse num domínio e a API em o
 
 ## Se o deploy falhar
 
-- **Build parando em `prisma migrate deploy`:** crie na Vercel a variável **`DIRECT_DATABASE_URL`** com a URI **Direct** do Supabase (porta **5432**). Migrações não funcionam bem só com o **pooler** (6543).
-- **Erro no build com Prisma:** confira `DATABASE_URL` e `DIRECT_DATABASE_URL` em **Production** (e Preview, se usar).
+- **Build parando em `prisma migrate deploy`:** troque `DATABASE_URL` na Vercel pela URI **Direct** (5432) do Supabase, não só pooler (6543).
+- **Erro no build com Prisma:** confira se `DATABASE_URL` está em **Production** (e Preview, se usar).
 - **Log com commit antigo:** no GitHub confira se o `main` está atualizado e na Vercel faça **Redeploy** do último commit.
 - **502 nas rotas /api:** veja os logs da função na Vercel.
 
