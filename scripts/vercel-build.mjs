@@ -25,6 +25,18 @@ function run(label, command, args) {
 
 console.log(`[vercel-build] repoRoot=${repoRoot}`);
 
+/**
+ * O schema Prisma exige DIRECT_DATABASE_URL. Na Vercel muita gente só cola DATABASE_URL.
+ * Se faltar, repetimos DATABASE_URL — funciona quando essa URI já é *direct* (ex. :5432).
+ * Se DATABASE_URL for só pooler (:6543) e o migrate falhar, crie DIRECT_DATABASE_URL na Vercel (URI direct do Supabase).
+ */
+if (process.env.DATABASE_URL && !process.env.DIRECT_DATABASE_URL) {
+  process.env.DIRECT_DATABASE_URL = process.env.DATABASE_URL;
+  console.warn(
+    "[vercel-build] DIRECT_DATABASE_URL ausente → usando o mesmo valor que DATABASE_URL.",
+  );
+}
+
 run("prisma generate", "npm", ["run", "db:generate", "--workspace=server"]);
 
 if (process.env.DATABASE_URL) {

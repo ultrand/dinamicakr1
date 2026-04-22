@@ -32,7 +32,7 @@
 | Nome | Valor |
 |------|--------|
 | `DATABASE_URL` | No Supabase: URI com **connection pooling** (ex. porta **6543**), se o painel oferecer — melhor para a API serverless. |
-| `DIRECT_DATABASE_URL` | No Supabase: URI **Session** ou **Direct** (porta **5432**) — o Prisma usa isso só para **`migrate deploy`** no build. Sem isso, o build costuma falhar no passo das migrações. |
+| `DIRECT_DATABASE_URL` | (Opcional na Vercel) URI **Direct** **5432** para migrações. Se **não** criar, o build **copia** `DATABASE_URL` — então basta uma URI **direct** em `DATABASE_URL`, ou defina as duas se usar pooler + direct no Supabase. |
 | `ADMIN_TOKEN` | Uma senha forte (acesso ao `/admin`) |
 | `CORS_ORIGINS` | Pode deixar `*` no começo, ou colocar depois a URL do site, ex. `https://seu-app.vercel.app` |
 
