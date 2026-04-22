@@ -29,6 +29,19 @@ import type { Question, StudyVersion, Task } from "../types";
 ───────────────────────────────────────────── */
 type VersionPayload = { studyId: string; version: StudyVersion | null };
 
+function capitalizeText(s: string) {
+  const t = (s ?? "").trim();
+  if (!t) return "—";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function formatTaskLabel(task: Task | undefined) {
+  if (!task) return "—";
+  const verb = (task.verb ?? "").trim().toUpperCase();
+  const text = capitalizeText(task.textoPrincipal);
+  return `${verb} ${text}`.trim();
+}
+
 type WizardState = {
   step: 1 | 2 | 3 | 4 | 5;
   selected: string[];                         // IDs selecionados
@@ -135,10 +148,17 @@ function Step1({
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(t);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    const arr = Array.from(map.entries());
+    // Ordem aleatória por sessão para evitar viés de leitura.
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
   }, [tasks]);
 
-  const [open, setOpen] = useState<Set<string>>(() => new Set(grouped.map(([k]) => k)));
+  // Inicia com todos os acordeões fechados.
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
 
   const toggle = (k: string) =>
     setOpen((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
@@ -179,7 +199,7 @@ function Step1({
                 {!isOpen && selCount > 0 && (
                   <span className="wz-accord-chips">
                     {etapaTasks.filter((t) => selected.includes(t.id)).map((t) => (
-                      <span key={t.id} className="wz-chip">{t.verb}</span>
+                      <span key={t.id} className="wz-chip">{formatTaskLabel(t)}</span>
                     ))}
                   </span>
                 )}
@@ -228,16 +248,12 @@ function SortableRankItem({
 }: { id: string; task: Task; rank: number; total: number; onMove: (dir: -1 | 1) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.45 : 1 };
-  const isTop5 = rank <= 5;
-
   return (
-    <div ref={setNodeRef} style={style} className={`wz-rank-row${isTop5 ? " top5" : ""}`}>
+    <div ref={setNodeRef} style={style} className="wz-rank-row">
       <span className="wz-rank-n">{rank}</span>
-      {isTop5 && <span className="wz-top5-star">★</span>}
       <button type="button" className="btn ghost wz-drag-handle" {...listeners} {...attributes} title="Arrastar">⠿</button>
       <div className="wz-rank-card">
-        <span className="wz-rank-verb">{task.verb}</span>
-        <span className="wz-rank-text">{task.textoPrincipal}</span>
+        <span className="wz-rank-text">{formatTaskLabel(task)}</span>
         {task.etapa && <span className="wz-rank-etapa">{task.etapa}</span>}
       </div>
       <div className="wz-rank-btns">
@@ -252,7 +268,6 @@ function Step2({
   orderedSelected, taskById, dispatch,
 }: { orderedSelected: string[]; taskById: Map<string, Task>; dispatch: React.Dispatch<Action> }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const top5 = orderedSelected.slice(0, 5);
 
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
@@ -276,13 +291,8 @@ function Step2({
       <div className="wz-section-hd">
         <div>
           <h2 className="wz-title">Ordene por prioridade</h2>
-          <p className="wz-sub">Arraste ou use ↑↓ para ordenar. <strong>As 5 primeiras</strong> (★) serão usadas nos fluxos.</p>
+          <p className="wz-sub">Arraste ou use ↑↓ para ordenar de forma geral, do mais crítico ao menos crítico.</p>
         </div>
-        {top5.length > 0 && (
-          <div className="wz-top5-pill">
-            Top 5: {top5.map((id) => taskById.get(id)?.verb ?? "?").join(", ")}
-          </div>
-        )}
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -310,7 +320,7 @@ function Step2({
    PASSO 3 — Perguntas conceituais
 ───────────────────────────────────────────── */
 function Step3({
-  qHardest, qText, hardestId, why, longText, selected, taskById, dispatch,
+  qHardest, qText, hardestId, why, longText, selected, taskById, dispatch, invalidHardest, invalidText,
 }: {
   qHardest: Question | undefined;
   qText: Question | undefined;
@@ -320,6 +330,8 @@ function Step3({
   selected: string[];
   taskById: Map<string, Task>;
   dispatch: React.Dispatch<Action>;
+  invalidHardest: boolean;
+  invalidText: boolean;
 }) {
   return (
     <div className="wz-body">
@@ -328,7 +340,7 @@ function Step3({
 
       {/* 3.1 — hardest_critical */}
       {qHardest && (
-        <motion.div className="wz-q-block" {...ciapMotion.onboardingY8}>
+        <motion.div className={`wz-q-block${invalidHardest ? " wz-invalid-pulse" : ""}`} {...ciapMotion.onboardingY8}>
           <div className="wz-q-label">{qHardest.title}</div>
           {qHardest.helpText && <p className="muted wz-q-help">{qHardest.helpText}</p>}
           <div className="wz-hardest-list">
@@ -343,8 +355,7 @@ function Step3({
                     checked={hardestId === id}
                     onChange={() => dispatch({ type: "SET_HARDEST", id })}
                   />
-                  <span className="wz-hardest-verb">{t.verb}</span>
-                  <span className="wz-hardest-text">{t.textoPrincipal}</span>
+                  <span className="wz-hardest-text">{formatTaskLabel(t)}</span>
                 </label>
               );
             })}
@@ -361,7 +372,7 @@ function Step3({
 
       {/* 3.2 — text_long */}
       {qText && (
-        <motion.div className="wz-q-block" {...ciapMotion.onboardingY8} transition={{ delay: 0.08 }}>
+        <motion.div className={`wz-q-block${invalidText ? " wz-invalid-pulse" : ""}`} {...ciapMotion.onboardingY8} transition={{ delay: 0.08 }}>
           <div className="wz-q-label">{qText.title}</div>
           {qText.helpText && <p className="muted wz-q-help">{qText.helpText}</p>}
           <div className="wz-text-prompts">
@@ -475,8 +486,8 @@ function Step4({
               return (
                 <motion.div key={crit.id} className="wz-flow-track-wrap" {...ciapMotion.onboardingY12} transition={ciapStagger(i, 0.07)}>
                   <div className="wz-flow-track-hd">
-                    <span className="wz-top5-star">★{i + 1}</span>
-                    <span className="wz-flow-crit-name">{crit.verb} {crit.textoPrincipal}</span>
+                    <span className="wz-top5-star">{i + 1}.</span>
+                    <span className="wz-flow-crit-name">{formatTaskLabel(crit)}</span>
                     <label className="wz-skip-label row-s" style={{ marginLeft: "auto" }}>
                       <input type="checkbox" checked={skipped} onChange={() => dispatch({ type: "TOGGLE_SKIP_FLOW", critId: crit.id })} />
                       <span style={{ fontSize: "var(--fs-xs)" }}>Pular</span>
@@ -501,7 +512,7 @@ function Step4({
                             onClick={() => dispatch({ type: "SET_CHAIN", critId: crit.id, chain: [...chain, { id: uuid(), taskId: t.id }] })}
                             title={`Adicionar: ${t.verb} ${t.textoPrincipal}`}
                           >
-                            + {t.verb}
+                            + {formatTaskLabel(t)}
                           </button>
                         ))}
                         {allTasks.length > 8 && (
@@ -591,8 +602,7 @@ function Step5({
           return (
             <div key={id} className="wz-review-flow">
               <span className="wz-top5-star">★{i + 1}</span>
-              <span className="wz-rank-verb">{t?.verb}</span>
-              <span className="wz-rank-text">{t?.textoPrincipal}</span>
+              <span className="wz-rank-text">{formatTaskLabel(t)}</span>
               {skipped ? (
                 <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>— pulado</span>
               ) : chain.length === 0 ? (
@@ -601,7 +611,7 @@ function Step5({
                 <div className="wz-review-chips">
                   {chain.map((e, si) => (
                     <span key={e.id} className="wz-chip">
-                      {si + 1}. {taskById.get(e.taskId)?.verb}
+                      {si + 1}. {formatTaskLabel(taskById.get(e.taskId))}
                     </span>
                   ))}
                 </div>
@@ -616,7 +626,7 @@ function Step5({
         <div className="wz-review-block">
           <div className="wz-review-hd">{qHardest?.title ?? "Tarefa mais difícil"}</div>
           <p style={{ fontSize: "var(--fs-sm)", margin: 0 }}>
-            <strong>{taskById.get(hardestId)?.verb} {taskById.get(hardestId)?.textoPrincipal}</strong>
+            <strong>{formatTaskLabel(taskById.get(hardestId))}</strong>
           </p>
           <p className="muted" style={{ fontSize: "var(--fs-sm)", margin: "4px 0 0" }}>{why}</p>
         </div>
@@ -651,6 +661,7 @@ export function ParticipantPage() {
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [stepErr, setStepErr] = useState<string | null>(null);
+  const [invalidStep3, setInvalidStep3] = useState({ hardest: false, text: false });
   const [maxReached, setMaxReached] = useState(1);
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -686,6 +697,7 @@ export function ParticipantPage() {
 
   const goStep = (target: WizardState["step"]) => {
     setStepErr(null);
+    if (state.step !== 3) setInvalidStep3({ hardest: false, text: false });
 
     if (target > state.step) {
       // validate current step
@@ -693,11 +705,18 @@ export function ParticipantPage() {
         setStepErr("Selecione ao menos uma tarefa antes de avançar."); return;
       }
       if (state.step === 3) {
+        let invalidHardest = false;
+        let invalidText = false;
         if (qHardest && (!state.hardestId || !state.why.trim())) {
-          setStepErr("Indique a tarefa mais difícil e explique o motivo."); return;
+          invalidHardest = true;
         }
         if (qText && !state.longText.trim()) {
-          setStepErr("Preencha a pergunta de dificuldades conceituais."); return;
+          invalidText = true;
+        }
+        if (invalidHardest || invalidText) {
+          setInvalidStep3({ hardest: invalidHardest, text: invalidText });
+          setStepErr("Preencha os campos obrigatórios destacados em vermelho.");
+          return;
         }
       }
     }
@@ -786,6 +805,8 @@ export function ParticipantPage() {
               qHardest={qHardest} qText={qText}
               hardestId={state.hardestId} why={state.why} longText={state.longText}
               selected={state.selected} taskById={taskById} dispatch={dispatch}
+              invalidHardest={invalidStep3.hardest}
+              invalidText={invalidStep3.text}
             />
           )}
           {state.step === 4 && (

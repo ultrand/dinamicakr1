@@ -469,7 +469,7 @@ td input:focus, td select:focus {
 .tc-verb {
   font-size: var(--fs-xs);
   font-weight: 600;
-  color: #92400e;
+  color: #18181b;
   line-height: 1.2;
   margin-bottom: 2px;
   white-space: nowrap;
@@ -1039,6 +1039,10 @@ td input:focus, td select:focus {
   color: var(--accent);
   font-size: var(--fs-xs);
   font-weight: 600;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .wz-accord-body {
   padding: var(--ciap-space-2) var(--ciap-space-3) var(--ciap-space-3);
@@ -1146,6 +1150,16 @@ td input:focus, td select:focus {
   padding: var(--ciap-space-3) var(--ciap-space-4);
   background: var(--surface);
   margin-bottom: var(--ciap-space-3);
+}
+.wz-invalid-pulse {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+  animation: wzPulse 1.1s ease-in-out infinite;
+}
+.wz-invalid-pulse .wz-textarea,
+.wz-invalid-pulse textarea {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
 }
 .wz-q-label {
   font-size: var(--fs-sm);
@@ -1380,6 +1394,10 @@ td input:focus, td select:focus {
 @keyframes app-fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes wzPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.1); }
+  50%      { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.22); }
 }
 .animate-in {
   animation: app-fade-in 0.3s var(--ciap-ease-emphasized) both;
