@@ -249,14 +249,23 @@ function SortableRankItem({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.45 : 1 };
   return (
-    <div ref={setNodeRef} style={style} className="wz-rank-row">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="wz-rank-row"
+      {...listeners}
+      {...attributes}
+      title="Arrastar para reordenar"
+    >
       <span className="wz-rank-n">{rank}</span>
-      <button type="button" className="btn ghost wz-drag-handle" {...listeners} {...attributes} title="Arrastar">⠿</button>
       <div className="wz-rank-card">
         <span className="wz-rank-text">{formatTaskLabel(task)}</span>
-        {task.etapa && <span className="wz-rank-etapa">{task.etapa}</span>}
+        <div className="wz-rank-meta">
+          {task.etapa && <span className="wz-rank-meta-item">Etapa: <strong>{task.etapa}</strong></span>}
+          {task.atividade && <span className="wz-rank-meta-item">Atividade: <strong>{task.atividade}</strong></span>}
+        </div>
       </div>
-      <div className="wz-rank-btns">
+      <div className="wz-rank-btns" onPointerDown={(e) => e.stopPropagation()}>
         <button type="button" className="btn-icon" onClick={() => onMove(-1)} disabled={rank === 1} title="Subir">↑</button>
         <button type="button" className="btn-icon" onClick={() => onMove(1)} disabled={rank === total} title="Descer">↓</button>
       </div>

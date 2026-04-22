@@ -1068,24 +1068,18 @@ td input:focus, td select:focus {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--surface);
+  cursor: grab;
+  user-select: none;
   transition: border-color var(--ciap-transition-base), box-shadow var(--ciap-transition-base);
 }
-.wz-rank-row.top5 {
-  border-color: rgba(124,58,237,0.35);
-  background: rgba(124,58,237,0.03);
-}
+.wz-rank-row:active { cursor: grabbing; }
+.wz-rank-row:hover { border-color: var(--ink-3); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
 .wz-rank-n {
   font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--ink-3);
   width: 22px;
   text-align: right;
-  flex-shrink: 0;
-}
-.wz-top5-star {
-  color: #d97706;
-  font-size: var(--fs-xs);
-  font-weight: 700;
   flex-shrink: 0;
 }
 .wz-drag-handle {
@@ -1105,13 +1099,6 @@ td input:focus, td select:focus {
   flex-direction: column;
   gap: 2px;
 }
-.wz-rank-verb {
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  color: #92400e;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
 .wz-rank-text {
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -1120,9 +1107,19 @@ td input:focus, td select:focus {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.wz-rank-etapa {
+.wz-rank-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 1px;
+}
+.wz-rank-meta-item {
   font-size: var(--fs-xs);
   color: var(--ink-3);
+}
+.wz-rank-meta-item strong {
+  color: var(--ink-2);
+  font-weight: 600;
 }
 .wz-rank-btns {
   display: flex;

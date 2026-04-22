@@ -339,25 +339,49 @@ adminRouter.get("/analytics", async (req, res) => {
 adminRouter.get("/export/csv", async (req, res) => {
   try {
     const versionId = typeof req.query.versionId === "string" ? req.query.versionId : undefined;
-    if (!versionId) {
-      res.status(400).json({ error: "versionId obrigatório" });
-      return;
-    }
-    const steps = await prisma.pathStep.findMany({
-      where: { path: { response: { studyVersionId: versionId } } },
+    if (!versionId) { res.status(400).json({ error: "versionId obrigatório" }); return; }
+
+    const responses = await prisma.response.findMany({
+      where: { studyVersionId: versionId },
       include: {
-        path: { select: { criticalTaskId: true, responseId: true } },
+        criticalSelections: true,
+        criticalRanks: { orderBy: { position: "asc" } },
+        criticalDifficulty: true,
+        conceptualDifficulties: { include: { question: { select: { type: true } } } },
+        paths: { include: { steps: { orderBy: { stepIndex: "asc" } } } },
       },
-      orderBy: [{ pathId: "asc" }, { stepIndex: "asc" }],
+      orderBy: { createdAt: "asc" },
     });
-    const lines = ["response_id,critical_task_id,step_index,task_id"];
-    for (const s of steps) {
-      lines.push(
-        `${s.path.responseId},${s.path.criticalTaskId},${s.stepIndex},${s.taskId}`,
-      );
+
+    const lines = [
+      "response_id,created_at,selected_task_ids,ranked_task_ids,hardest_task_id,hardest_why,long_text,critical_task_id,flow_steps",
+    ];
+    for (const r of responses) {
+      const selected = r.criticalSelections.map((s) => s.taskId).join("|");
+      const ranked = r.criticalRanks.map((x) => `${x.position}:${x.taskId}`).join("|");
+      const hardestWhy = (r.criticalDifficulty?.whyText ?? "").replace(/"/g, '""');
+      const longText = (
+        r.conceptualDifficulties.find((c) => c.question.type === "text_long")?.text ?? ""
+      ).replace(/"/g, '""');
+
+      if (r.paths.length === 0) {
+        lines.push(
+          `${r.id},${r.createdAt.toISOString()},"${selected}","${ranked}",` +
+          `${r.criticalDifficulty?.taskId ?? ""},"${hardestWhy}","${longText}",,`,
+        );
+      } else {
+        for (const p of r.paths) {
+          const steps = p.steps.map((s) => s.taskId).join("|");
+          lines.push(
+            `${r.id},${r.createdAt.toISOString()},"${selected}","${ranked}",` +
+            `${r.criticalDifficulty?.taskId ?? ""},"${hardestWhy}","${longText}",${p.criticalTaskId},"${steps}"`,
+          );
+        }
+      }
     }
+
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="paths-${versionId}.csv"`);
+    res.setHeader("Content-Disposition", `attachment; filename="responses-${versionId}.csv"`);
     res.send(lines.join("\n"));
   } catch (e) {
     console.error(e);
@@ -368,27 +392,108 @@ adminRouter.get("/export/csv", async (req, res) => {
 adminRouter.get("/export/json", async (req, res) => {
   try {
     const versionId = typeof req.query.versionId === "string" ? req.query.versionId : undefined;
-    if (!versionId) {
-      res.status(400).json({ error: "versionId obrigatório" });
-      return;
-    }
-    const paths = await prisma.path.findMany({
-      where: { response: { studyVersionId: versionId } },
+    if (!versionId) { res.status(400).json({ error: "versionId obrigatório" }); return; }
+
+    const responses = await prisma.response.findMany({
+      where: { studyVersionId: versionId },
       include: {
-        steps: { orderBy: { stepIndex: "asc" } },
+        criticalSelections: true,
+        criticalRanks: { orderBy: { position: "asc" } },
+        criticalDifficulty: true,
+        conceptualDifficulties: { include: { question: { select: { type: true } } } },
+        paths: { include: { steps: { orderBy: { stepIndex: "asc" } } } },
       },
+      orderBy: { createdAt: "asc" },
     });
-    const byResponse: Record<string, Record<string, string[]>> = {};
-    for (const p of paths) {
-      if (!byResponse[p.responseId]) byResponse[p.responseId] = {};
-      byResponse[p.responseId]![p.criticalTaskId] = p.steps.map((s) => s.taskId);
-    }
+
+    const out = responses.map((r) => ({
+      id: r.id,
+      createdAt: r.createdAt,
+      selectedCriticalTaskIds: r.criticalSelections.map((s) => s.taskId),
+      orderedCriticalTaskIds: r.criticalRanks.map((x) => ({ taskId: x.taskId, position: x.position })),
+      hardestTaskId: r.criticalDifficulty?.taskId ?? null,
+      hardestWhy: r.criticalDifficulty?.whyText ?? null,
+      longText: r.conceptualDifficulties.find((c) => c.question.type === "text_long")?.text ?? null,
+      flows: r.paths.map((p) => ({
+        criticalTaskId: p.criticalTaskId,
+        steps: p.steps.map((s) => s.taskId),
+      })),
+    }));
+
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="responses-${versionId}.json"`);
-    res.json(byResponse);
+    res.json(out);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Erro" });
+  }
+});
+
+adminRouter.post("/duplicate-version", async (req, res) => {
+  try {
+    const { sourceVersionId } = req.body as { sourceVersionId?: string };
+    if (!sourceVersionId) {
+      res.status(400).json({ error: "sourceVersionId obrigatório" });
+      return;
+    }
+    const source = await prisma.studyVersion.findFirst({
+      where: { id: sourceVersionId, isDraft: false },
+      include: {
+        tasks: true,
+        questions: { orderBy: { sortOrder: "asc" } },
+      },
+    });
+    if (!source) {
+      res.status(404).json({ error: "Versão publicada não encontrada" });
+      return;
+    }
+    const study = await getOrCreateStudy();
+    // Remove draft existente se não tiver respostas
+    const existingDraft = await prisma.studyVersion.findFirst({
+      where: { studyId: study.id, isDraft: true },
+    });
+    if (existingDraft) {
+      const draftResponses = await prisma.response.count({ where: { studyVersionId: existingDraft.id } });
+      if (draftResponses > 0) {
+        res.status(409).json({ error: "Rascunho atual já tem respostas; publique ou apague antes" });
+        return;
+      }
+      await prisma.studyVersion.delete({ where: { id: existingDraft.id } });
+    }
+    const draft = await prisma.$transaction(async (tx) => {
+      const newDraft = await tx.studyVersion.create({
+        data: { studyId: study.id, isDraft: true, number: 0 },
+      });
+      for (const t of source.tasks) {
+        await tx.task.create({
+          data: {
+            studyVersionId: newDraft.id,
+            verb: t.verb,
+            textoPrincipal: t.textoPrincipal,
+            atividade: t.atividade,
+            etapa: t.etapa,
+            inactive: t.inactive,
+          },
+        });
+      }
+      for (const q of source.questions) {
+        await tx.question.create({
+          data: {
+            studyVersionId: newDraft.id,
+            type: q.type,
+            title: q.title,
+            helpText: q.helpText,
+            required: q.required,
+            sortOrder: q.sortOrder,
+          },
+        });
+      }
+      return newDraft;
+    });
+    res.json({ ok: true, draftId: draft.id, copiedFrom: sourceVersionId });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao duplicar versão" });
   }
 });
 

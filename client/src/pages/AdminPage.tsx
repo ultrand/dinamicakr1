@@ -22,6 +22,14 @@ import type { Question, Task } from "../types";
 
 const LS = "dinamica_admin_token";
 
+const Q_TYPES = [
+  { value: "critical_select",         label: "Seleção de críticas",   hint: "Participante escolhe tasks críticas" },
+  { value: "critical_rank",           label: "Ranking de críticas",   hint: "Ordena as selecionadas (top-5 vai para fluxo)" },
+  { value: "hardest_critical",        label: "Mais difícil + por quê", hint: "Escolhe a task mais difícil e justifica" },
+  { value: "text_long",               label: "Texto longo",           hint: "Resposta livre sobre dificuldades" },
+  { value: "flow_builder_per_critical", label: "Fluxo por crítica",   hint: "Constrói fluxo de passos para o top-5" },
+];
+
 type Overview = {
   study: { id: string; name: string };
   draft: { id: string; tasks: Task[]; questions: Question[] };
@@ -46,23 +54,16 @@ function SortableQ({
     setTitle(q.title); setHelp(q.helpText); setRequired(q.required);
   }, [q.id, q.title, q.helpText, q.required]);
 
+  const typeInfo = Q_TYPES.find((x) => x.value === q.type);
+
   return (
     <div ref={setNodeRef} style={style} className="q-card">
-      {/* col 1: handle */}
       <button type="button" className="btn ghost q-drag" {...listeners} {...attributes} title="Arrastar">
         ⠿
       </button>
-
-      {/* col 2: fields */}
       <div className="q-body">
         <div className="q-meta">
-          <span className="badge" title={
-            q.type === "critical_select" ? "Seleção livre de tarefas críticas" :
-            q.type === "critical_rank" ? "Ranking das tarefas selecionadas (top-5 vai para fluxo)" :
-            q.type === "hardest_critical" ? "Qual foi a crítica mais difícil e por quê" :
-            q.type === "text_long" ? "Texto livre sobre dificuldades conceituais" :
-            q.type === "flow_builder_per_critical" ? "Fluxo de passos por crítica (top-5)" : q.type
-          }>{q.type}</span>
+          <span className="badge" title={typeInfo?.hint ?? q.type}>{typeInfo?.label ?? q.type}</span>
           <label className="row-s" style={{ cursor: "pointer", gap: 4 }}>
             <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} />
             <span style={{ fontSize: "var(--fs-xs)" }}>Obrigatória</span>
@@ -79,8 +80,6 @@ function SortableQ({
           </div>
         </div>
       </div>
-
-      {/* col 3: save */}
       <div className="q-actions">
         <button
           type="button"
@@ -90,6 +89,66 @@ function SortableQ({
         >
           Salvar
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Nova pergunta form ──────────────────────────────────── */
+function NewQuestionForm({ token, onCreated }: { token: string; onCreated: () => void }) {
+  const [open,     setOpen]     = useState(false);
+  const [type,     setType]     = useState("critical_select");
+  const [title,    setTitle]    = useState("");
+  const [help,     setHelp]     = useState("");
+  const [required, setRequired] = useState(true);
+  const [err,      setErr]      = useState<string | null>(null);
+
+  const submit = async () => {
+    setErr(null);
+    try {
+      await apiSend("/api/admin/questions", "POST", { type, title, helpText: help, required }, token);
+      setTitle(""); setHelp(""); setOpen(false);
+      onCreated();
+    } catch (e) { setErr(e instanceof Error ? e.message : "Erro"); }
+  };
+
+  if (!open) return (
+    <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setOpen(true)}>
+      + Nova pergunta
+    </button>
+  );
+
+  return (
+    <div className="panel">
+      <div className="panel-hd">Nova pergunta</div>
+      <div className="panel-body stack-s">
+        {err && <p className="error">{err}</p>}
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <div className="field" style={{ flex: "1 1 200px" }}>
+            <label>Tipo</label>
+            <select value={type} onChange={(e) => setType(e.target.value)}>
+              {Q_TYPES.map((qt) => (
+                <option key={qt.value} value={qt.value}>{qt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field" style={{ flex: "2 1 280px" }}>
+            <label>Título</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Texto exibido ao participante" />
+          </div>
+        </div>
+        <div className="field">
+          <label>Instrução / ajuda</label>
+          <textarea value={help} onChange={(e) => setHelp(e.target.value)} rows={2} placeholder="Texto de apoio (opcional)" />
+        </div>
+        <div className="row-s">
+          <label className="row-s" style={{ cursor: "pointer", gap: 4 }}>
+            <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} />
+            <span>Obrigatória</span>
+          </label>
+          <button type="button" className="btn primary" onClick={() => void submit()}>Criar</button>
+          <button type="button" className="btn" onClick={() => setOpen(false)}>Cancelar</button>
+        </div>
       </div>
     </div>
   );
@@ -106,6 +165,7 @@ export function AdminPage() {
   const [qSearch,  setQSearch]  = useState("");
   const [bulk,     setBulk]     = useState("");
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [dupLoading, setDupLoading] = useState<string | null>(null);
 
   const authed = token.length > 0;
 
@@ -171,6 +231,20 @@ export function AdminPage() {
     } catch (e) { setErr(e instanceof Error ? e.message : "Erro"); }
   };
 
+  const duplicateVersion = async (sourceId: string) => {
+    if (!confirm("Criar rascunho a partir desta versão? O rascunho atual sem respostas será descartado.")) return;
+    setDupLoading(sourceId);
+    try {
+      await apiSend("/api/admin/duplicate-version", "POST", { sourceVersionId: sourceId }, token);
+      flash("Rascunho criado a partir da versão publicada.");
+      await load();
+    } catch (e) { setErr(e instanceof Error ? e.message : "Erro"); }
+    finally { setDupLoading(null); }
+  };
+
+  const exportUrl = (vId: string, fmt: "csv" | "json") =>
+    `/api/admin/export/${fmt}?versionId=${vId}&token=${encodeURIComponent(token)}`;
+
   const filteredTasks = (overview?.draft.tasks ?? []).filter((t) => {
     const s = qSearch.toLowerCase();
     if (!s) return true;
@@ -207,7 +281,6 @@ export function AdminPage() {
         <h1 style={{ margin: 0 }}>Admin</h1>
         <div className="row-s">
           <Link to="/admin/analise" className="btn ghost">Análise</Link>
-          <Link to="/admin/export"  className="btn ghost">Export</Link>
           <button type="button" className="btn ghost" onClick={() => publish()}>
             ↑ Publicar
           </button>
@@ -221,28 +294,30 @@ export function AdminPage() {
       <div className="tabs">
         {(["q","c","v"] as const).map((t) => (
           <button key={t} type="button" className={`tab${tab === t ? " active" : ""}`} onClick={() => setTab(t)}>
-            { t === "q" ? "Perguntas" : t === "c" ? `Cards (${overview?.draft.tasks.length ?? 0})` : "Versões" }
+            { t === "q" ? `Perguntas (${sortedQ.length})` : t === "c" ? `Cards (${overview?.draft.tasks.length ?? 0})` : "Versões" }
           </button>
         ))}
       </div>
 
       {/* ── TAB: Perguntas ── */}
       {tab === "q" && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onReorder(e)}>
-          <SortableContext items={sortedQ.map((q) => q.id)} strategy={verticalListSortingStrategy}>
-            <div className="stack-s">
-              {sortedQ.map((q) => (
-                <SortableQ key={q.id} q={q} onSave={(id, p) => void saveQuestion(id, p)} />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+        <div className="stack-s">
+          <NewQuestionForm token={token} onCreated={() => void load()} />
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onReorder(e)}>
+            <SortableContext items={sortedQ.map((q) => q.id)} strategy={verticalListSortingStrategy}>
+              <div className="stack-s">
+                {sortedQ.map((q) => (
+                  <SortableQ key={q.id} q={q} onSave={(id, p) => void saveQuestion(id, p)} />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
       )}
 
       {/* ── TAB: Cards ── */}
       {tab === "c" && (
         <div className="stack-s">
-          {/* toolbar */}
           <div className="row" style={{ gap: 6 }}>
             <input
               type="search"
@@ -251,16 +326,11 @@ export function AdminPage() {
               onChange={(e) => setQSearch(e.target.value)}
               style={{ width: 220 }}
             />
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setBulkOpen((v) => !v)}
-            >
+            <button type="button" className="btn" onClick={() => setBulkOpen((v) => !v)}>
               {bulkOpen ? "Fechar" : "+ Adicionar em massa"}
             </button>
           </div>
 
-          {/* bulk */}
           {bulkOpen && (
             <div className="panel">
               <div className="panel-hd">Adicionar em massa — uma tarefa por linha</div>
@@ -269,7 +339,7 @@ export function AdminPage() {
                   value={bulk}
                   onChange={(e) => setBulk(e.target.value)}
                   rows={6}
-                  placeholder={"Definir objetivos do serviço\nMapear pessoas envolvidas\n…"}
+                  placeholder={"ENTENDER Cenário do serviço\nMAPEAR Pessoas envolvidas\n…"}
                 />
                 <div className="row-s">
                   <button type="button" className="btn primary" onClick={() => void bulkAdd()}>Criar cards</button>
@@ -279,7 +349,6 @@ export function AdminPage() {
             </div>
           )}
 
-          {/* table */}
           <div className="table-wrap">
             <table>
               <thead>
@@ -307,26 +376,58 @@ export function AdminPage() {
         <div className="stack-s">
           <div className="row-s">
             <button type="button" className="btn primary" onClick={() => void publish()}>
-              ↑ Publicar versão (snapshot imutável)
+              ↑ Publicar rascunho atual
             </button>
-            <span className="muted">Tudo editado fica em rascunho até publicar.</span>
+            <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+              Cria snapshot imutável com base no rascunho.
+            </span>
           </div>
+
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>v</th>
+                  <th style={{ width: 36 }}>v</th>
                   <th>Publicada em</th>
-                  <th>Respostas</th>
-                  <th>ID</th>
+                  <th style={{ width: 70 }}>Resp.</th>
+                  <th>Export</th>
+                  <th style={{ width: 130 }}>Ações</th>
+                  <th className="muted" style={{ fontSize: "0.68rem" }}>ID</th>
                 </tr>
               </thead>
               <tbody>
                 {(overview?.publishedVersions ?? []).map((v) => (
                   <tr key={v.id}>
-                    <td><strong>{v.number}</strong></td>
+                    <td><strong>v{v.number}</strong></td>
                     <td>{v.publishedAt ? new Date(v.publishedAt).toLocaleString("pt-BR") : "—"}</td>
                     <td>{v._count.responses}</td>
+                    <td>
+                      <div className="row-s">
+                        <a
+                          className="btn ghost"
+                          style={{ fontSize: "0.7rem", padding: "2px 6px" }}
+                          href={exportUrl(v.id, "csv")}
+                          download
+                        >CSV</a>
+                        <a
+                          className="btn ghost"
+                          style={{ fontSize: "0.7rem", padding: "2px 6px" }}
+                          href={exportUrl(v.id, "json")}
+                          download
+                        >JSON</a>
+                      </div>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ fontSize: "0.7rem", whiteSpace: "nowrap" }}
+                        disabled={dupLoading === v.id}
+                        onClick={() => void duplicateVersion(v.id)}
+                      >
+                        {dupLoading === v.id ? "…" : "⎘ Duplicar → rascunho"}
+                      </button>
+                    </td>
                     <td className="muted" style={{ fontFamily: "monospace", fontSize: "0.68rem" }}>{v.id}</td>
                   </tr>
                 ))}

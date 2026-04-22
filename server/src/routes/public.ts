@@ -181,14 +181,13 @@ publicRouter.post("/responses", async (req, res) => {
         }
 
         if (q.type === "critical_rank" && a.orderedCriticalTaskIds) {
-          // armazena ranking como JSON no ConceptualDifficulty (sem migration)
-          await tx.conceptualDifficulty.create({
-            data: {
-              responseId: r.id,
-              questionId: q.id,
-              text: JSON.stringify(a.orderedCriticalTaskIds),
-            },
-          });
+          for (let i = 0; i < a.orderedCriticalTaskIds.length; i++) {
+            const tid = a.orderedCriticalTaskIds[i]!;
+            if (!taskIds.has(tid)) throw new Error("task");
+            await tx.criticalRank.create({
+              data: { responseId: r.id, taskId: tid, position: i + 1 },
+            });
+          }
         }
 
         if (q.type === "text_long") {

@@ -7,14 +7,27 @@ import { ciapMotion } from "../ciap-motion";
 const LS = "dinamica_admin_token";
 
 type Rank   = { taskId: string; count: number; label: string };
+type RankPos = { taskId: string; label: string; avgPosition: number; count: number };
+type Disagree = { taskId: string; label: string; disagreement: number; count: number };
+type HardestCount = { taskId: string; label: string; count: number };
+type FlowCov = { criticalTaskId: string; label: string; filledCount: number; skippedCount: number; emptyCount: number; filledPercent: number };
 type Common = { criticalTaskId: string; criticalLabel: string; sequenceLabel: string[]; frequency: number; percent: number };
 type Edge   = { from: string; to: string; fromLabel: string; toLabel: string; weight: number };
+type Keyword = { term: string; count: number };
 type Analytics = {
   criticalRanking: Rank[];
   bottleneckRanking: Rank[];
   step1Ranking: Rank[];
   commonPathByCritical: Common[];
   graph: { edges: Edge[] };
+  // novos
+  top5Ranking: Rank[];
+  avgRankPosition: RankPos[];
+  disagreementIndex: Disagree[];
+  hardestCounts: HardestCount[];
+  flowCoverageTop5: FlowCov[];
+  whyKeywordsTop: Keyword[];
+  longTextKeywordsTop: Keyword[];
 };
 type Ver = { id: string; number: number; publishedAt: string | null; _count: { responses: number } };
 
@@ -26,6 +39,7 @@ export function AnalyticsPage() {
   const [critChoices,  setCritChoices]  = useState<{ id: string; label: string }[]>([]);
   const [data,         setData]         = useState<Analytics | null>(null);
   const [err,          setErr]          = useState<string | null>(null);
+  const [section,      setSection]      = useState<"ranking" | "fluxos" | "grafo">("ranking");
 
   const loadVers = useCallback(async () => {
     if (!token) return;
@@ -60,7 +74,7 @@ export function AnalyticsPage() {
   );
 
   const maxEdge = data?.graph.edges.length ? Math.max(...data.graph.edges.map((e) => e.weight)) : 1;
-  const maxRank = (rows: Rank[]) => rows.length ? Math.max(...rows.map((r) => r.count)) : 1;
+  const maxRank = (rows: { count: number }[]) => rows.length ? Math.max(...rows.map((r) => r.count)) : 1;
 
   return (
     <motion.div className="page" {...ciapMotion.sectionFade}>
@@ -70,7 +84,7 @@ export function AnalyticsPage() {
       </div>
 
       {/* filtros */}
-      <div className="row" style={{ marginBottom: 12, gap: 8 }}>
+      <div className="row" style={{ marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
         <div className="field">
           <label>Versão</label>
           <select value={versionId} onChange={(e) => setVersionId(e.target.value)} style={{ width: 200 }}>
@@ -93,79 +107,158 @@ export function AnalyticsPage() {
         {err && <span className="error">{err}</span>}
       </div>
 
-      {data ? (
-        <div className="stack-s">
-          {/* rankings em 2 colunas */}
-          <div className="analytics-grid">
-            <div className="panel">
-              <div className="panel-hd">Críticas mais selecionadas</div>
-              <div className="panel-body">
-                <RankList rows={data.criticalRanking} max={maxRank(data.criticalRanking)} />
-              </div>
-            </div>
-            <div className="panel">
-              <div className="panel-hd">Gargalos (pré-requisitos mais usados)</div>
-              <div className="panel-body">
-                <RankList rows={data.bottleneckRanking} max={maxRank(data.bottleneckRanking)} />
-              </div>
-            </div>
-            <div className="panel">
-              <div className="panel-hd">Passo 1 — mais frequente</div>
-              <div className="panel-body">
-                <RankList rows={data.step1Ranking} max={maxRank(data.step1Ranking)} />
-              </div>
-            </div>
-            <div className="panel">
-              <div className="panel-hd">Caminho mais comum por crítica</div>
-              <div className="panel-body">
-                <div className="table-wrap" style={{ border: "none", borderRadius: 0 }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Crítica</th>
-                        <th>Sequência dominante</th>
-                        <th>n</th>
-                        <th>%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.commonPathByCritical.map((c) => (
-                        <tr key={c.criticalTaskId}>
-                          <td style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {c.criticalLabel}
-                          </td>
-                          <td style={{ fontSize: "var(--fs-xs)", color: "var(--ink-2)" }}>
-                            {c.sequenceLabel.join(" → ") || "—"}
-                          </td>
-                          <td>{c.frequency}</td>
-                          <td>{c.percent}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* sub-nav */}
+      <div className="tabs" style={{ marginBottom: 12 }}>
+        {(["ranking","fluxos","grafo"] as const).map((s) => (
+          <button key={s} type="button" className={`tab${section === s ? " active" : ""}`} onClick={() => setSection(s)}>
+            {s === "ranking" ? "Ranking & Seleção" : s === "fluxos" ? "Fluxos" : "Grafo"}
+          </button>
+        ))}
+      </div>
 
-          {/* grafo full width */}
-          <div className="panel">
-            <div className="panel-hd">Grafo de transições A → B (espessura = frequência)</div>
-            <div className="panel-body">
-              {data.graph.edges.slice(0, 60).map((e) => (
-                <div key={`${e.from}-${e.to}`} className="graph-edge">
-                  <span className="rank-n" style={{ width: "auto" }}>{e.weight}×</span>
-                  <span className="rank-label">{e.fromLabel} → {e.toLabel}</span>
-                  <div
-                    className="graph-bar"
-                    style={{ width: `${Math.max(6, (e.weight / maxEdge) * 240)}px` }}
-                  />
+      {data ? (
+        <>
+          {section === "ranking" && (
+            <div className="stack-s">
+              {/* linha 1 */}
+              <div className="analytics-grid">
+                <div className="panel">
+                  <div className="panel-hd">Críticas mais selecionadas</div>
+                  <div className="panel-body">
+                    <RankList rows={data.criticalRanking} max={maxRank(data.criticalRanking)} />
+                  </div>
                 </div>
-              ))}
-              {data.graph.edges.length === 0 && <p className="muted">Sem dados.</p>}
+                <div className="panel">
+                  <div className="panel-hd">Top-5 mais frequentes no ranking</div>
+                  <div className="panel-body">
+                    <RankList rows={data.top5Ranking} max={maxRank(data.top5Ranking)} />
+                  </div>
+                </div>
+              </div>
+
+              {/* linha 2 */}
+              <div className="analytics-grid">
+                <div className="panel">
+                  <div className="panel-hd" title="Posição média no ranking (menor = mais prioritária)">
+                    Posição média no ranking ↓ melhor
+                  </div>
+                  <div className="panel-body">
+                    <AvgPosList rows={data.avgRankPosition} />
+                  </div>
+                </div>
+                <div className="panel">
+                  <div className="panel-hd" title="Desvio-padrão das posições — tarefas controversas têm maior divergência">
+                    Divergência de posição (controversas)
+                  </div>
+                  <div className="panel-body">
+                    <DisagreeList rows={data.disagreementIndex} />
+                  </div>
+                </div>
+              </div>
+
+              {/* linha 3 */}
+              <div className="analytics-grid">
+                <div className="panel">
+                  <div className="panel-hd">Tarefa mais difícil (mais citada)</div>
+                  <div className="panel-body">
+                    <RankList rows={data.hardestCounts} max={maxRank(data.hardestCounts)} />
+                  </div>
+                </div>
+                <div className="panel">
+                  <div className="panel-hd">Palavras-chave: "por quê é difícil"</div>
+                  <div className="panel-body">
+                    <KeywordCloud words={data.whyKeywordsTop} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-hd">Palavras-chave: texto longo (dificuldades conceituais)</div>
+                <div className="panel-body">
+                  <KeywordCloud words={data.longTextKeywordsTop} />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+
+          {section === "fluxos" && (
+            <div className="stack-s">
+              <div className="analytics-grid">
+                <div className="panel">
+                  <div className="panel-hd">Cobertura dos fluxos (Top-5 do ranking)</div>
+                  <div className="panel-body">
+                    <FlowCoveragePanel rows={data.flowCoverageTop5} />
+                  </div>
+                </div>
+                <div className="panel">
+                  <div className="panel-hd">Gargalos (pré-requisitos mais usados)</div>
+                  <div className="panel-body">
+                    <RankList rows={data.bottleneckRanking} max={maxRank(data.bottleneckRanking)} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="analytics-grid">
+                <div className="panel">
+                  <div className="panel-hd">Passo 1 — mais frequente nos fluxos</div>
+                  <div className="panel-body">
+                    <RankList rows={data.step1Ranking} max={maxRank(data.step1Ranking)} />
+                  </div>
+                </div>
+                <div className="panel">
+                  <div className="panel-hd">Caminho mais comum por crítica</div>
+                  <div className="panel-body">
+                    <div className="table-wrap" style={{ border: "none", borderRadius: 0 }}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Crítica</th>
+                            <th>Sequência dominante</th>
+                            <th>n</th>
+                            <th>%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.commonPathByCritical.map((c) => (
+                            <tr key={c.criticalTaskId}>
+                              <td style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {c.criticalLabel}
+                              </td>
+                              <td style={{ fontSize: "var(--fs-xs)", color: "var(--ink-2)" }}>
+                                {c.sequenceLabel.join(" → ") || "—"}
+                              </td>
+                              <td>{c.frequency}</td>
+                              <td>{c.percent}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {section === "grafo" && (
+            <div className="panel">
+              <div className="panel-hd">Grafo de transições A → B (espessura = frequência)</div>
+              <div className="panel-body">
+                {data.graph.edges.slice(0, 60).map((e) => (
+                  <div key={`${e.from}-${e.to}`} className="graph-edge">
+                    <span className="rank-n" style={{ width: "auto" }}>{e.weight}×</span>
+                    <span className="rank-label">{e.fromLabel} → {e.toLabel}</span>
+                    <div
+                      className="graph-bar"
+                      style={{ width: `${Math.max(6, (e.weight / maxEdge) * 240)}px` }}
+                    />
+                  </div>
+                ))}
+                {data.graph.edges.length === 0 && <p className="muted">Sem dados.</p>}
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <p className="muted">Carregando…</p>
       )}
@@ -173,12 +266,14 @@ export function AnalyticsPage() {
   );
 }
 
-function RankList({ rows, max }: { rows: Rank[]; max: number }) {
+/* ── Sub-components ─────────────────────────────────────── */
+
+function RankList({ rows, max }: { rows: { taskId?: string; label: string; count: number }[]; max: number }) {
   if (!rows.length) return <p className="muted">Sem dados.</p>;
   return (
     <>
       {rows.slice(0, 20).map((r, i) => (
-        <div key={r.taskId} className="rank-row">
+        <div key={r.taskId ?? i} className="rank-row">
           <span className="rank-n">{i + 1}</span>
           <div className="rank-bar" style={{ width: `${Math.max(4, (r.count / max) * 120)}px` }} />
           <span className="rank-label">{r.label}</span>
@@ -186,5 +281,85 @@ function RankList({ rows, max }: { rows: Rank[]; max: number }) {
         </div>
       ))}
     </>
+  );
+}
+
+function AvgPosList({ rows }: { rows: RankPos[] }) {
+  if (!rows.length) return <p className="muted">Sem dados de ranking.</p>;
+  const maxPos = Math.max(...rows.map((r) => r.avgPosition), 1);
+  return (
+    <>
+      {rows.slice(0, 20).map((r, i) => (
+        <div key={r.taskId} className="rank-row">
+          <span className="rank-n">{i + 1}</span>
+          <div className="rank-bar" style={{ width: `${Math.max(4, (r.avgPosition / maxPos) * 120)}px`, background: "var(--accent)" }} />
+          <span className="rank-label">{r.label}</span>
+          <span className="rank-count" title="posição média">{r.avgPosition.toFixed(1)}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function DisagreeList({ rows }: { rows: Disagree[] }) {
+  if (!rows.length) return <p className="muted">Sem dados de ranking.</p>;
+  const maxD = Math.max(...rows.map((r) => r.disagreement), 1);
+  return (
+    <>
+      {rows.slice(0, 20).map((r, i) => (
+        <div key={r.taskId} className="rank-row">
+          <span className="rank-n">{i + 1}</span>
+          <div
+            className="rank-bar"
+            style={{ width: `${Math.max(4, (r.disagreement / maxD) * 120)}px`, background: "#f59e0b" }}
+          />
+          <span className="rank-label">{r.label}</span>
+          <span className="rank-count" title="desvio-padrão das posições">σ {r.disagreement.toFixed(1)}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function FlowCoveragePanel({ rows }: { rows: FlowCov[] }) {
+  if (!rows.length) return <p className="muted">Sem dados de fluxo.</p>;
+  return (
+    <div className="stack-s">
+      {rows.map((r) => (
+        <div key={r.criticalTaskId} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 4 }}>
+          <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, gridColumn: "1/-1" }}>{r.label}</span>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            <span className="badge badge-y" title="Preenchidos">{r.filledCount} ✓</span>
+            <span className="badge" style={{ background: "#fef3c7", color: "#92400e" }} title="Pulados">{r.skippedCount} →</span>
+            <span className="badge" style={{ background: "#fee2e2", color: "#991b1b" }} title="Vazios">{r.emptyCount} ✗</span>
+          </div>
+          <span style={{ fontSize: "var(--fs-xs)", color: "var(--ink-2)", alignSelf: "center" }}>
+            {r.filledPercent}% preenchidos
+          </span>
+          <div style={{ gridColumn: "1/-1", height: 6, background: "#e5e7eb", borderRadius: 3 }}>
+            <div style={{ width: `${r.filledPercent}%`, height: "100%", background: "var(--accent)", borderRadius: 3 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function KeywordCloud({ words }: { words: { term: string; count: number }[] }) {
+  if (!words.length) return <p className="muted">Sem dados.</p>;
+  const maxC = Math.max(...words.map((w) => w.count), 1);
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      {words.map((w) => (
+        <span
+          key={w.term}
+          className="chip"
+          style={{ fontSize: `${0.65 + (w.count / maxC) * 0.45}rem`, opacity: 0.6 + (w.count / maxC) * 0.4 }}
+          title={`${w.count}×`}
+        >
+          {w.term}
+        </span>
+      ))}
+    </div>
   );
 }

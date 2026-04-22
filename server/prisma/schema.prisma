@@ -42,6 +42,7 @@ model Task {
   createdAt        DateTime @default(now())
 
   criticalSelections CriticalSelection[]
+  criticalRanks      CriticalRank[]
   criticalDifficulty CriticalDifficulty[]
   pathSteps          PathStep[]
 
@@ -71,9 +72,22 @@ model Response {
   createdAt        DateTime @default(now())
 
   criticalSelections   CriticalSelection[]
+  criticalRanks        CriticalRank[]
   criticalDifficulty   CriticalDifficulty?
   conceptualDifficulties ConceptualDifficulty[]
   paths                Path[]
+}
+
+model CriticalRank {
+  id         String   @id @default(cuid())
+  responseId String
+  response   Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  position   Int
+
+  @@index([responseId])
+  @@index([taskId])
 }
 
 model CriticalSelection {
