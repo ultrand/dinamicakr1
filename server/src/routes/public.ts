@@ -33,6 +33,7 @@ publicRouter.get("/version", async (_req, res) => {
 type AnswerIn = {
   questionId: string;
   criticalTaskIds?: string[];
+  orderedCriticalTaskIds?: string[];  // critical_rank: ranking completo
   taskId?: string;
   why?: string;
   text?: string;
@@ -99,9 +100,17 @@ publicRouter.post("/responses", async (req, res) => {
           return;
         }
       }
+      if (q.type === "critical_rank") {
+        if (!a.orderedCriticalTaskIds?.length) {
+          res.status(400).json({ error: "Ranking das tarefas críticas obrigatório" });
+          return;
+        }
+      }
       if (q.type === "flow_builder_per_critical") {
-        if (!a.flows?.length) {
-          res.status(400).json({ error: "Monte os fluxos para cada crítica" });
+        // fluxo: exige ao menos 1 preenchido entre os top-5
+        const hasAny = (a.flows ?? []).some((f) => f.stepTaskIds.length > 0);
+        if (!hasAny) {
+          res.status(400).json({ error: "Preencha o fluxo de ao menos uma tarefa crítica" });
           return;
         }
       }
@@ -124,18 +133,18 @@ publicRouter.post("/responses", async (req, res) => {
       return;
     }
 
+    // Deriva top5 a partir do ranking (critical_rank), ou fallback para selected
+    const rankQ = questions.find((q) => q.type === "critical_rank");
+    const rankAns = answers.find((x) => x.questionId === rankQ?.id);
+    const orderedIds = rankAns?.orderedCriticalTaskIds ?? selected;
+    const top5Set = new Set(orderedIds.slice(0, 5));
+
     const flowQ = questions.find((q) => q.type === "flow_builder_per_critical");
     const flowAns = answers.find((x) => x.questionId === flowQ?.id);
     if (flowAns?.flows?.length) {
-      const flowCrits = new Set(flowAns.flows.map((f) => f.criticalTaskId));
-      for (const s of selected) {
-        if (!flowCrits.has(s)) {
-          res.status(400).json({ error: "Monte o fluxo para cada tarefa crítica selecionada" });
-          return;
-        }
-      }
       for (const f of flowAns.flows) {
-        if (!selectedSet.has(f.criticalTaskId)) {
+        // só valida fluxos de críticas do top5 (ignora extra)
+        if (!top5Set.has(f.criticalTaskId) && !selectedSet.has(f.criticalTaskId)) {
           res.status(400).json({ error: "Fluxos só podem usar críticas selecionadas" });
           return;
         }
@@ -167,6 +176,17 @@ publicRouter.post("/responses", async (req, res) => {
               responseId: r.id,
               taskId: a.taskId,
               whyText: (a.why ?? "").trim(),
+            },
+          });
+        }
+
+        if (q.type === "critical_rank" && a.orderedCriticalTaskIds) {
+          // armazena ranking como JSON no ConceptualDifficulty (sem migration)
+          await tx.conceptualDifficulty.create({
+            data: {
+              responseId: r.id,
+              questionId: q.id,
+              text: JSON.stringify(a.orderedCriticalTaskIds),
             },
           });
         }

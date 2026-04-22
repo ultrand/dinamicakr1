@@ -199,7 +199,7 @@ adminRouter.delete("/tasks/:id", async (req, res) => {
   }
 });
 
-const Q_TYPES = new Set(["critical_select", "hardest_critical", "text_long", "flow_builder_per_critical"]);
+const Q_TYPES = new Set(["critical_select", "critical_rank", "hardest_critical", "text_long", "flow_builder_per_critical"]);
 
 adminRouter.post("/questions", async (req, res) => {
   try {

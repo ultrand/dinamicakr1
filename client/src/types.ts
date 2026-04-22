@@ -8,9 +8,16 @@ export type Task = {
   hasResponses?: boolean;
 };
 
+export type QuestionType =
+  | "critical_select"
+  | "critical_rank"
+  | "hardest_critical"
+  | "text_long"
+  | "flow_builder_per_critical";
+
 export type Question = {
   id: string;
-  type: string;
+  type: QuestionType | string;
   title: string;
   helpText: string;
   required: boolean;

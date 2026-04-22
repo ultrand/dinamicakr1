@@ -56,7 +56,13 @@ function SortableQ({
       {/* col 2: fields */}
       <div className="q-body">
         <div className="q-meta">
-          <span className="badge">{q.type}</span>
+          <span className="badge" title={
+            q.type === "critical_select" ? "Seleção livre de tarefas críticas" :
+            q.type === "critical_rank" ? "Ranking das tarefas selecionadas (top-5 vai para fluxo)" :
+            q.type === "hardest_critical" ? "Qual foi a crítica mais difícil e por quê" :
+            q.type === "text_long" ? "Texto livre sobre dificuldades conceituais" :
+            q.type === "flow_builder_per_critical" ? "Fluxo de passos por crítica (top-5)" : q.type
+          }>{q.type}</span>
           <label className="row-s" style={{ cursor: "pointer", gap: 4 }}>
             <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} />
             <span style={{ fontSize: "var(--fs-xs)" }}>Obrigatória</span>
