@@ -23,6 +23,7 @@ Copie a **connection string** `postgresql://...` (em Neon costuma incluir `?sslm
 1. Conecte o repositório Git ou faça deploy da imagem buildada a partir do `Dockerfile` na raiz.
 2. Variáveis de ambiente:
    - `DATABASE_URL` — URL do Postgres (obrigatório)
+   - `DIRECT_URL` — mesma URL que `DATABASE_URL` em Postgres “normal”; no Supabase + Prisma ver `VERCEL-SOLO.md`
    - `ADMIN_TOKEN` — senha forte do `/admin` (obrigatório)
    - `PORT` — muitas plataformas injetam automaticamente; deixe vazio ou use o valor que a plataforma indicar
    - `PUBLIC_URL` — URL pública do site (ex.: `https://seu-app.onrender.com`), só para log

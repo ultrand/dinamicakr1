@@ -8,10 +8,9 @@ Siga na ordem. O que o Cursor **já deixou pronto** no código: `vercel.json`, `
 
 1. Acesse [supabase.com](https://supabase.com) e abra seu projeto (ou crie um).
 2. **Project Settings → Database**
-3. Copie a **Connection string** no formato **URI** (começa com `postgresql://`).
-4. Para deploy serverless, use o **Transaction pooler** se aparecer (porta **6543**), ou a URI que o próprio Supabase indicar para “serverless”.
-
-Guarde essa string — é o valor de `DATABASE_URL`.
+3. No **Connect**, copie duas URIs (ver [Supabase + Prisma](https://supabase.com/docs/guides/database/prisma)):
+   - **Session pooler** (porta **5432**) → na Vercel: **`DIRECT_URL`** (migrações no build).
+   - **Transaction pooler** (porta **6543**) + `?pgbouncer=true` → na Vercel: **`DATABASE_URL`** (API). Para testes, podes usar a mesma URI do Session nas duas variáveis.
 
 ---
 
@@ -40,7 +39,8 @@ Guarde essa string — é o valor de `DATABASE_URL`.
 
 | Nome | Valor |
 |------|--------|
-| `DATABASE_URL` | URI do Supabase (**Direct** / **Session**, porta **5432** — evite só *transaction pooler* 6543 se o migrate falhar) |
+| `DATABASE_URL` | Supabase **Transaction** 6543 + `?pgbouncer=true` (ou Session 5432 nas duas variáveis para testar) |
+| `DIRECT_URL` | Supabase **Session pooler** 5432 (`…pooler.supabase.com`) |
 | `ADMIN_TOKEN` | Uma senha longa e secreta (acesso `/admin`) |
 | `CORS_ORIGINS` | `*` no começo, ou depois `https://SEU-PROJETO.vercel.app` |
 
@@ -74,7 +74,7 @@ npm run db:seed --workspace=server
 
 | Sintoma | O que checar |
 |---------|----------------|
-| Build falha na Vercel | Logs do build: `DATABASE_URL` está nas env vars? |
+| Build falha na Vercel | Logs: `DATABASE_URL` e **`DIRECT_URL`** (Session pooler) nas env vars? |
 | `/api/health` 500 | Logs da função **Serverless** na Vercel; conferir `DATABASE_URL` e se o Supabase aceita conexões. |
 | Página em branco | Console do navegador (F12); rota errada ou JS bloqueado. |
 | CORS | Ajuste `CORS_ORIGINS` para a URL exata do site. |

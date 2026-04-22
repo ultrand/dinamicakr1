@@ -18,9 +18,12 @@
 ### 1) Supabase
 
 1. Crie um projeto.
-2. Em **Project Settings → Database**, copie a **connection string** (URI).
-3. Para servidor “serverless” (Vercel), prefira o **Transaction pooler** (porta **6543**), se o Supabase oferecer — ajuda com muitas conexões curtas.
-4. Cole essa URL na Vercel como `DATABASE_URL` (próximo passo).
+2. Abra **Connect** (ou **Project Settings → Database**).
+3. O Prisma na Vercel precisa de **duas** strings (igual à [documentação Supabase + Prisma](https://supabase.com/docs/guides/database/prisma)):
+   - **`DIRECT_URL`** — aba **Session pooler**, tipo **URI**, porta **5432**, host que termina em **`pooler.supabase.com`**. Serve para **`prisma migrate deploy`** no build (IPv4-friendly; não use só o host `db…supabase.co` se a Vercel não conseguir IPv6).
+   - **`DATABASE_URL`** — para a API em serverless, use o **Transaction pooler**, porta **6543**, e no fim da string acrescente **`?pgbouncer=true`** (o painel do Supabase costuma mostrar isso).
+4. No utilizador da URI do **pooler**, o Supabase usa o formato **`postgres.SEU_PROJECT_REF`** (ex.: `postgres.abcxyz`) — copie do painel; não inventes o prefixo.
+5. Se a palavra-passe tiver **`#`**, **`@`**, **`:`**, etc., tem de ir **codificada** na URI (ex.: `#` → `%23`), ou muda a palavra-passe para uma sem esses símbolos.
 
 ### 2) Vercel
 
@@ -31,11 +34,12 @@
 
 | Nome | Valor |
 |------|--------|
-| `DATABASE_URL` | Uma única URI do Supabase. Use a conexão **Direct** ou **Session** (porta **5432**) — é a que o Prisma usa no **build** (`migrate deploy`) e na API. Evite só o **Transaction pooler** (6543) se o migrate falhar. |
+| `DATABASE_URL` | **Transaction pooler** (6543) + `?pgbouncer=true` — conexões curtas na função serverless. |
+| `DIRECT_URL` | **Session pooler** (5432, host `…pooler.supabase.com`) — obrigatória para o build aplicar migrações. |
 | `ADMIN_TOKEN` | Uma senha forte (acesso ao `/admin`) |
 | `CORS_ORIGINS` | Pode deixar `*` no começo, ou colocar depois a URL do site, ex. `https://seu-app.vercel.app` |
 
-No **Supabase** → **Project Settings → Database** → copie a string **URI** da aba **Direct** (ou **Session**), não a do *Transaction pooler*, para `DATABASE_URL`.
+**Mínimo viável (só para testar):** podes colar a **mesma** URI do Session pooler em **`DATABASE_URL`** e em **`DIRECT_URL`** (menos ideal para muito tráfego, mas costuma funcionar).
 
 5. **Deploy**.
 
@@ -65,8 +69,9 @@ Só usaria `VITE_API_BASE` se um dia o front estivesse num domínio e a API em o
 
 ## Se o deploy falhar
 
-- **Build parando em `prisma migrate deploy`:** troque `DATABASE_URL` na Vercel pela URI **Direct** (5432) do Supabase, não só pooler (6543).
-- **Erro no build com Prisma:** confira se `DATABASE_URL` está em **Production** (e Preview, se usar).
+- **Log `[vercel-build] Falta a variável DIRECT_URL`:** cria **`DIRECT_URL`** na Vercel com a URI do **Session pooler** (5432) do Supabase.
+- **Build parando em `prisma migrate deploy`:** confirma **`DIRECT_URL`** = Session pooler; **`DATABASE_URL`** em serverless = Transaction (6543) + `?pgbouncer=true`, ou as duas iguais ao Session para testar.
+- **Erro no build com Prisma:** confirma **`DATABASE_URL`** e **`DIRECT_URL`** em **Production** (e Preview, se usar).
 - **Log com commit antigo:** no GitHub confira se o `main` está atualizado e na Vercel faça **Redeploy** do último commit.
 - **502 nas rotas /api:** veja os logs da função na Vercel.
 

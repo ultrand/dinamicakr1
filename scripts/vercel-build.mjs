@@ -28,6 +28,14 @@ console.log(`[vercel-build] repoRoot=${repoRoot}`);
 run("prisma generate", "npm", ["run", "db:generate", "--workspace=server"]);
 
 if (process.env.DATABASE_URL) {
+  if (!process.env.DIRECT_URL) {
+    console.error(
+      "[vercel-build] Falta a variável DIRECT_URL na Vercel. " +
+        "No Supabase: Connect → modo Session pooler → URI com porta 5432 (host …pooler.supabase.com). " +
+        "Guia: VERCEL-SOLO.md (duas URLs: DATABASE_URL + DIRECT_URL).",
+    );
+    process.exit(1);
+  }
   run("prisma migrate deploy", "npm", ["run", "db:deploy", "--workspace=server"]);
 } else {
   console.warn(
