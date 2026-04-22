@@ -4,10 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  // App (ex. Supabase Transaction pooler :6543 + ?pgbouncer=true). Migrações usam DIRECT_URL.
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Study {

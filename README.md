@@ -77,8 +77,7 @@ O download aceita o token na query string (útil no navegador).
 
 | Variável        | Descrição                                      |
 |-----------------|------------------------------------------------|
-| `DATABASE_URL`  | URL Postgres da app (Supabase: **Transaction** 6543 + `?pgbouncer=true` em serverless) |
-| `DIRECT_URL`    | URL para migrações Prisma (Supabase: **Session pooler** 5432); em local Docker, igual a `DATABASE_URL` |
+| `DATABASE_URL`  | URL Postgres — na Vercel: URI do Supabase (Session pooler, porta 5432) |
 | `ADMIN_TOKEN`   | Token do painel admin                          |
 | `PORT`          | Porta da API (padrão `3001`)                   |
 | `CORS_ORIGINS`  | Origens permitidas (opcional; ver `DEPLOY.md`) |

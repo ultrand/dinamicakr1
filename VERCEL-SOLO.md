@@ -1,82 +1,77 @@
-# Só Vercel + Supabase (sem Railway, sem Docker Hub)
+# Deploy: Vercel + Supabase
 
-**Checklist na ordem:** abra também **`PROXIMOS-PASSOS.md`** (GitHub + variáveis + testes).
-
-## O que você precisa ter conta
-
-| Serviço | Para quê |
-|---------|----------|
-| **Vercel** | O site + a API (tudo no mesmo domínio `.vercel.app`) |
-| **Supabase** | O banco de dados (PostgreSQL) |
-
-**Não** precisa criar conta em **Docker** nem em **Railway/Render** — Docker aqui é só arquivo no projeto; a Vercel usa isso por baixo dos panos quando faz o deploy.
+Precisas de conta em **Vercel** (o site + API) e **Supabase** (base de dados). Só isso.
 
 ---
 
-## Passo a passo (bem curto)
+## Passo 1 — Supabase: copia a URL da base de dados
 
-### 1) Supabase
+1. Entra no teu projeto em [supabase.com](https://supabase.com).
+2. Clica em **Connect** (botão no topo).
+3. Escolhe **Session pooler** → tipo **URI**.
+4. Copia a string que começa por `postgresql://...` (porta **5432**).
+5. **Guarda-a** — vais usá-la no Passo 2 e no Passo 3.
 
-1. Crie um projeto.
-2. Abra **Connect** (ou **Project Settings → Database**).
-3. O Prisma na Vercel precisa de **duas** strings (igual à [documentação Supabase + Prisma](https://supabase.com/docs/guides/database/prisma)):
-   - **`DIRECT_URL`** — aba **Session pooler**, tipo **URI**, porta **5432**, host que termina em **`pooler.supabase.com`**. Serve para **`prisma migrate deploy`** no build (IPv4-friendly; não use só o host `db…supabase.co` se a Vercel não conseguir IPv6).
-   - **`DATABASE_URL`** — para a API em serverless, use o **Transaction pooler**, porta **6543**, e no fim da string acrescente **`?pgbouncer=true`** (o painel do Supabase costuma mostrar isso).
-4. No utilizador da URI do **pooler**, o Supabase usa o formato **`postgres.SEU_PROJECT_REF`** (ex.: `postgres.abcxyz`) — copie do painel; não inventes o prefixo.
-5. Se a palavra-passe tiver **`#`**, **`@`**, **`:`**, etc., tem de ir **codificada** na URI (ex.: `#` → `%23`), ou muda a palavra-passe para uma sem esses símbolos.
+> Se a tua senha tiver `#`, `@` ou outros símbolos especiais, vai ao Supabase, muda a senha da base de dados para uma com só **letras e números**, e copia a URI de novo.
 
-### 2) Vercel
+---
 
-1. **Import project** → o repositório Git deste app.
-2. **Root Directory:** deixe **vazio** ou **`.`** (raiz do repo). **Não** use `server` — o build quebra.
-3. A Vercel usa o `vercel.json` (build do client + função em `api/index.ts`).
-4. Em **Settings → Environment Variables**, adicione pelo menos:
+## Passo 2 — Aplica as tabelas na base de dados (uma vez, do teu PC)
+
+Abre o terminal **dentro da pasta do projeto** e corre:
+
+```powershell
+$env:DATABASE_URL="COLA_AQUI_A_URI_DO_SUPABASE"; npm run db:setup
+```
+
+Substitui `COLA_AQUI_A_URI_DO_SUPABASE` pela URI copiada no Passo 1 (mantém as aspas).
+
+✅ Quando aparecer `All migrations have been successfully applied` (ou similar), as tabelas foram criadas. **Só precisas de fazer isto uma vez.**
+
+---
+
+## Passo 3 — Vercel: liga o repositório e define as variáveis
+
+1. Em [vercel.com](https://vercel.com) → **Add New → Project** → importa o repositório do GitHub.
+2. **Root Directory:** deixa **vazio** (não escrevas `server`).
+3. Clica em **Deploy** — vai falhar na primeira vez se não tiveres as variáveis. Isso é normal.
+4. Vai a **Settings → Environment Variables** e adiciona:
 
 | Nome | Valor |
 |------|--------|
-| `DATABASE_URL` | **Transaction pooler** (6543) + `?pgbouncer=true` — conexões curtas na função serverless. |
-| `DIRECT_URL` | **Session pooler** (5432, host `…pooler.supabase.com`) — obrigatória para o build aplicar migrações. |
-| `ADMIN_TOKEN` | Uma senha forte (acesso ao `/admin`) |
-| `CORS_ORIGINS` | Pode deixar `*` no começo, ou colocar depois a URL do site, ex. `https://seu-app.vercel.app` |
+| `DATABASE_URL` | A mesma URI do Supabase que usaste no Passo 1 |
+| `ADMIN_TOKEN` | Uma senha longa qualquer (ex: `minha-senha-secreta-2026`) |
+| `CORS_ORIGINS` | `*` |
 
-**Mínimo viável (só para testar):** podes colar a **mesma** URI do Session pooler em **`DATABASE_URL`** e em **`DIRECT_URL`** (menos ideal para muito tráfego, mas costuma funcionar).
+5. Vai a **Deployments** → clica no último deploy → **Redeploy**.
 
-5. **Deploy**.
-
-6. Depois do primeiro deploy, abra no navegador:
-   - `https://SEU-PROJETO.vercel.app/api/health` → deve aparecer JSON com `"ok": true`.
-   - `https://SEU-PROJETO.vercel.app/` → participante.
-   - `/admin` → painel (com o token que você definiu).
-
-### 3) Popular tarefas (seed) — uma vez
-
-O build já roda `prisma migrate deploy`. Para carregar as tarefas iniciais, você pode:
-
-- Rodar localmente com `DATABASE_URL` apontando para o Supabase:  
-  `npm run db:seed --workspace=server`  
-  **ou**
-- Adicionar um comando/script depois no painel (opcional).
+✅ Quando aparecer ✓ no deploy, o site está no ar.
 
 ---
 
-## Variável `VITE_API_BASE`
+## Passo 4 — Testa
 
-**Não precisa** configurar se o site e a API estão **no mesmo domínio** da Vercel (é o caso deste guia). O app chama `/api/...` no mesmo endereço.
+- `https://SEU-PROJETO.vercel.app/api/health` → deve aparecer `{"ok":true,...}`
+- `https://SEU-PROJETO.vercel.app/` → ecrã do participante
+- `https://SEU-PROJETO.vercel.app/admin` → painel (pede o `ADMIN_TOKEN`)
 
-Só usaria `VITE_API_BASE` se um dia o front estivesse num domínio e a API em outro.
+---
+
+## Carregar tarefas iniciais (seed) — opcional
+
+Para preencher a base de dados com as tarefas do ficheiro `server/prisma/seed-tasks.txt`, corre no terminal do teu PC:
+
+```powershell
+$env:DATABASE_URL="COLA_AQUI_A_URI_DO_SUPABASE"; npm run db:seed
+```
 
 ---
 
 ## Se o deploy falhar
 
-- **Log `[vercel-build] Falta a variável DIRECT_URL`:** cria **`DIRECT_URL`** na Vercel com a URI do **Session pooler** (5432) do Supabase.
-- **Build parando em `prisma migrate deploy`:** confirma **`DIRECT_URL`** = Session pooler; **`DATABASE_URL`** em serverless = Transaction (6543) + `?pgbouncer=true`, ou as duas iguais ao Session para testar.
-- **Erro no build com Prisma:** confirma **`DATABASE_URL`** e **`DIRECT_URL`** em **Production** (e Preview, se usar).
-- **Log com commit antigo:** no GitHub confira se o `main` está atualizado e na Vercel faça **Redeploy** do último commit.
-- **502 nas rotas /api:** veja os logs da função na Vercel.
-
----
-
-## Resumo
-
-Você usa **só as contas que já quis** (Vercel + Supabase). O código foi ajustado para a API rodar **na própria Vercel** (`api/index.ts`), sem segundo serviço de hospedagem.
+| Erro no log | O que fazer |
+|-------------|-------------|
+| `prisma generate` falhou | Verifica se o repositório está actualizado no GitHub (`git push`) |
+| `vite build` falhou | Erro de código — partilha o log completo |
+| `502` nas rotas `/api` | Vai a **Vercel → Deployments → Functions → Logs** e partilha o erro |
+| Base de dados sem tabelas | Corre de novo o comando do Passo 2 |

@@ -1,82 +1,77 @@
 # Próximos passos (ordem sugerida)
 
-Siga na ordem. O que o Cursor **já deixou pronto** no código: `vercel.json`, `api/index.ts`, `scripts/vercel-build.mjs`, build do client/server.
+Siga na ordem. Leia **`VERCEL-SOLO.md`** para o guia detalhado passo a passo.
 
 ---
 
-## 1. Supabase (banco)
+## 1. Supabase (banco de dados)
 
-1. Acesse [supabase.com](https://supabase.com) e abra seu projeto (ou crie um).
-2. **Project Settings → Database**
-3. No **Connect**, copie duas URIs (ver [Supabase + Prisma](https://supabase.com/docs/guides/database/prisma)):
-   - **Session pooler** (porta **5432**) → na Vercel: **`DIRECT_URL`** (migrações no build).
-   - **Transaction pooler** (porta **6543**) + `?pgbouncer=true` → na Vercel: **`DATABASE_URL`** (API). Para testes, podes usar a mesma URI do Session nas duas variáveis.
+1. Acesse [supabase.com](https://supabase.com) e abra (ou crie) o seu projeto.
+2. Clique em **Connect** → **Session pooler** → tipo **URI** → copie a string `postgresql://...` (porta **5432**).
+3. Guarde essa URL — é o único valor que precisas.
 
 ---
 
 ## 2. Repositório Git + GitHub
 
-1. No PC, na pasta do projeto:
-   ```bash
-   git init
-   git add .
-   git commit -m "Deploy: Vercel + Supabase"
-   ```
-2. No GitHub: **New repository** (pode ser privado).
-3. Siga as instruções do GitHub para **enviar o código** (`git remote add` + `git push`).
+```bash
+git add .
+git commit -m "Deploy: Vercel + Supabase"
+git push
+```
 
-> Se o projeto já tiver `git` e `remote`, só faça `git push`.
+> Se o projeto ainda não tiver repositório GitHub, cria um em [github.com](https://github.com) e faz `git remote add origin URL && git push -u origin main`.
 
 ---
 
-## 3. Vercel
+## 3. Cria as tabelas na base de dados (uma só vez, do teu PC)
 
-1. Acesse [vercel.com](https://vercel.com) → **Add New → Project**.
-2. **Import** o repositório do GitHub.
-3. **Root Directory:** deixe **vazio** (raiz do monorepo). Se estiver `server`, apague — senão o build falha com “Missing script: vercel-build”.
-4. Deixe o resto padrão — o `vercel.json` já define build e pasta de saída.
-5. Em **Environment Variables**, adicione (para **Production** e, se quiser, **Preview**):
+```powershell
+$env:DATABASE_URL="COLA_AQUI_A_URI_DO_SUPABASE"; npm run db:setup
+```
+
+✅ Quando aparecer que as migrações foram aplicadas, as tabelas estão criadas.
+
+---
+
+## 4. Vercel
+
+1. Acesse [vercel.com](https://vercel.com) → **Add New → Project** → importa o repositório.
+2. **Root Directory:** deixa **vazio**.
+3. Em **Environment Variables**, adiciona:
 
 | Nome | Valor |
 |------|--------|
-| `DATABASE_URL` | Supabase **Transaction** 6543 + `?pgbouncer=true` (ou Session 5432 nas duas variáveis para testar) |
-| `DIRECT_URL` | Supabase **Session pooler** 5432 (`…pooler.supabase.com`) |
-| `ADMIN_TOKEN` | Uma senha longa e secreta (acesso `/admin`) |
-| `CORS_ORIGINS` | `*` no começo, ou depois `https://SEU-PROJETO.vercel.app` |
+| `DATABASE_URL` | A URI do Supabase (Session pooler, porta 5432) |
+| `ADMIN_TOKEN` | Uma senha secreta longa |
+| `CORS_ORIGINS` | `*` |
 
-6. **Deploy**.
-
----
-
-## 4. Testar
-
-Abra no navegador (troque pelo seu domínio):
-
-- `https://SEU-PROJETO.vercel.app/api/health` → deve mostrar JSON com `"ok": true`
-- `https://SEU-PROJETO.vercel.app/` → tela do participante
-- `https://SEU-PROJETO.vercel.app/admin` → admin (use o `ADMIN_TOKEN`)
+4. Clica **Deploy**.
 
 ---
 
-## 5. Popular tarefas (opcional, uma vez)
+## 5. Testa
 
-Com o `DATABASE_URL` no ambiente local (`server/.env`):
+- `https://SEU-PROJETO.vercel.app/api/health` → deve mostrar `{"ok":true,...}`
+- `https://SEU-PROJETO.vercel.app/` → ecrã do participante
+- `https://SEU-PROJETO.vercel.app/admin` → admin (usa o `ADMIN_TOKEN`)
 
-```bash
-npm run db:seed --workspace=server
+---
+
+## 6. Popular tarefas (opcional)
+
+```powershell
+$env:DATABASE_URL="COLA_AQUI_A_URI_DO_SUPABASE"; npm run db:seed
 ```
 
-(Se pedir `SYNC_DRAFT_TASKS` para substituir cards, veja o `README` / `DEPLOY.md`.)
-
 ---
 
-## 6. Se algo falhar
+## 7. Se algo falhar
 
-| Sintoma | O que checar |
-|---------|----------------|
-| Build falha na Vercel | Logs: `DATABASE_URL` e **`DIRECT_URL`** (Session pooler) nas env vars? |
-| `/api/health` 500 | Logs da função **Serverless** na Vercel; conferir `DATABASE_URL` e se o Supabase aceita conexões. |
-| Página em branco | Console do navegador (F12); rota errada ou JS bloqueado. |
-| CORS | Ajuste `CORS_ORIGINS` para a URL exata do site. |
+| Sintoma | O que fazer |
+|---------|-------------|
+| Build falha na Vercel | Vê o log completo e partilha aqui |
+| `/api/health` retorna 500 | Logs da função em **Vercel → Deployments → Functions** |
+| Página em branco | Abre o console do navegador (F12) |
 
-Mais detalhes: **`VERCEL-SOLO.md`**.
+Guia completo: **`VERCEL-SOLO.md`**.

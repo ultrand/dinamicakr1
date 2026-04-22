@@ -23,7 +23,6 @@ services:
       - "3001:3001"
     environment:
       DATABASE_URL: postgresql://dinamica:dinamica@db:5432/dinamica
-      DIRECT_URL: postgresql://dinamica:dinamica@db:5432/dinamica
       ADMIN_TOKEN: ${ADMIN_TOKEN:-troque-este-token-em-producao}
       PORT: "3001"
       PUBLIC_URL: http://localhost:3001
