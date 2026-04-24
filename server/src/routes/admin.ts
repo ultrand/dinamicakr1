@@ -15,7 +15,7 @@ adminRouter.get("/overview", async (_req, res) => {
     const published = await prisma.studyVersion.findMany({
       where: { studyId: study.id, isDraft: false },
       orderBy: { number: "desc" },
-      select: { id: true, number: true, publishedAt: true, _count: { select: { responses: true } } },
+      select: { id: true, number: true, publishedAt: true, label: true, _count: { select: { responses: true } } },
     });
     const draftFull = await prisma.studyVersion.findUnique({
       where: { id: draft.id },
@@ -416,6 +416,7 @@ adminRouter.get("/export/json", async (req, res) => {
       longText: r.conceptualDifficulties.find((c) => c.question.type === "text_long")?.text ?? null,
       flows: r.paths.map((p) => ({
         criticalTaskId: p.criticalTaskId,
+        comment: p.comment,
         steps: p.steps.map((s) => s.taskId),
       })),
     }));
@@ -497,6 +498,21 @@ adminRouter.post("/duplicate-version", async (req, res) => {
   }
 });
 
+adminRouter.patch("/versions/:id/label", async (req, res) => {
+  try {
+    const { label } = req.body as { label?: string };
+    const updated = await prisma.studyVersion.update({
+      where: { id: req.params.id },
+      data: { label: (label ?? "").trim() },
+      select: { id: true, label: true },
+    });
+    res.json(updated);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao renomear versão" });
+  }
+});
+
 adminRouter.get("/versions", async (_req, res) => {
   try {
     const study = await getOrCreateStudy();
@@ -507,6 +523,7 @@ adminRouter.get("/versions", async (_req, res) => {
         id: true,
         number: true,
         publishedAt: true,
+        label: true,
         _count: { select: { responses: true } },
       },
     });

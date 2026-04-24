@@ -37,7 +37,7 @@ type AnswerIn = {
   taskId?: string;
   why?: string;
   text?: string;
-  flows?: { criticalTaskId: string; stepTaskIds: string[] }[];
+  flows?: { criticalTaskId: string; stepTaskIds: string[]; comment?: string }[];
 };
 
 publicRouter.post("/responses", async (req, res) => {
@@ -207,6 +207,7 @@ publicRouter.post("/responses", async (req, res) => {
               data: {
                 responseId: r.id,
                 criticalTaskId: flow.criticalTaskId,
+                comment: (flow.comment ?? "").trim(),
               },
             });
             for (const tid of flow.stepTaskIds) {

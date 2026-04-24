@@ -44,13 +44,14 @@ function formatTaskLabel(task: Task | undefined) {
 
 type WizardState = {
   step: 1 | 2 | 3 | 4 | 5;
-  selected: string[];                         // IDs selecionados
-  orderedSelected: string[];                  // ranking passo 2
+  selected: string[];
+  orderedSelected: string[];
   hardestId: string | null;
   why: string;
   longText: string;
-  chains: Record<string, ChainEntry[]>;       // fluxos por critica
-  skippedFlows: Set<string>;                  // top5 pulados
+  chains: Record<string, ChainEntry[]>;
+  flowComments: Record<string, string>;
+  visibleFlowCount: number;               // quantos fluxos estão visíveis (1-5)
 };
 
 type Action =
@@ -61,7 +62,8 @@ type Action =
   | { type: "SET_WHY"; why: string }
   | { type: "SET_LONG_TEXT"; text: string }
   | { type: "SET_CHAIN"; critId: string; chain: ChainEntry[] }
-  | { type: "TOGGLE_SKIP_FLOW"; critId: string };
+  | { type: "SET_FLOW_COMMENT"; critId: string; comment: string }
+  | { type: "ADD_NEXT_FLOW" };
 
 function reducer(s: WizardState, a: Action): WizardState {
   switch (a.type) {
@@ -84,11 +86,10 @@ function reducer(s: WizardState, a: Action): WizardState {
     case "SET_WHY": return { ...s, why: a.why };
     case "SET_LONG_TEXT": return { ...s, longText: a.text };
     case "SET_CHAIN": return { ...s, chains: { ...s.chains, [a.critId]: a.chain } };
-    case "TOGGLE_SKIP_FLOW": {
-      const next = new Set(s.skippedFlows);
-      next.has(a.critId) ? next.delete(a.critId) : next.add(a.critId);
-      return { ...s, skippedFlows: next };
-    }
+    case "SET_FLOW_COMMENT":
+      return { ...s, flowComments: { ...s.flowComments, [a.critId]: a.comment } };
+    case "ADD_NEXT_FLOW":
+      return { ...s, visibleFlowCount: Math.min(s.visibleFlowCount + 1, 5) };
     default: return s;
   }
 }
@@ -96,7 +97,7 @@ function reducer(s: WizardState, a: Action): WizardState {
 const initState: WizardState = {
   step: 1, selected: [], orderedSelected: [],
   hardestId: null, why: "", longText: "",
-  chains: {}, skippedFlows: new Set(),
+  chains: {}, flowComments: {}, visibleFlowCount: 1,
 };
 
 /* ─────────────────────────────────────────────
@@ -404,20 +405,31 @@ function Step3({
 }
 
 /* ─────────────────────────────────────────────
-   PASSO 4 — Fluxos (top 5)
+   PASSO 4 — Fluxos (progressivo, top 1-5)
 ───────────────────────────────────────────── */
 function Step4({
-  top5, taskById, chains, skippedFlows, dispatch,
+  top5, taskById, chains, flowComments, visibleFlowCount, dispatch,
 }: {
   top5: Task[];
   taskById: Map<string, Task>;
   chains: Record<string, ChainEntry[]>;
-  skippedFlows: Set<string>;
+  flowComments: Record<string, string>;
+  visibleFlowCount: number;
   dispatch: React.Dispatch<Action>;
 }) {
   const allTasks = Array.from(taskById.values());
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const [overlayTask, setOverlayTask] = useState<Task | null>(null);
+  const [bankSearch, setBankSearch] = useState("");
+
+  const visibleTop5 = top5.slice(0, visibleFlowCount);
+  const filteredBank = bankSearch
+    ? allTasks.filter((t) =>
+        `${t.verb} ${t.textoPrincipal} ${t.atividade} ${t.etapa}`
+          .toLowerCase()
+          .includes(bankSearch.toLowerCase()),
+      )
+    : allTasks;
 
   const onDragStart = (e: DragStartEvent) => {
     const d = e.active.data.current as { type?: string; taskId?: string } | undefined;
@@ -464,83 +476,136 @@ function Step4({
 
   return (
     <div className="wz-body">
-      <h2 className="wz-title">Monte os fluxos de tarefas</h2>
-      <p className="wz-sub">Para cada crítica do Top 5, indique a sequência de passos necessários para realizá-la. Clique em + Adicionar ou arraste do banco.</p>
+      <div className="wz-section-hd">
+        <div>
+          <h2 className="wz-title">Monte os fluxos de tarefas</h2>
+          <p className="wz-sub">
+            Indique a sequência de passos que leva à tarefa crítica.
+            Arraste do banco ou clique em + para adicionar.
+            Ao menos 1 fluxo deve ser preenchido.
+          </p>
+        </div>
+        <div className="wz-counter-pill">{visibleFlowCount} de {Math.min(top5.length, 5)}</div>
+      </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setOverlayTask(null)}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setOverlayTask(null)}
+      >
         <div className="wz-flow-layout">
-          {/* banco lateral */}
+
+          {/* ── banco lateral ── */}
           <div className="wz-flow-bank-sticky">
             <div className="bank-wrap">
               <div className="bank-wrap-hd">
                 <span className="label-sm">Banco de cards</span>
                 <span className="badge">{allTasks.length}</span>
               </div>
-              <p className="muted" style={{ margin: "4px 0 8px", fontSize: "var(--fs-xs)" }}>Clique em + ou arraste</p>
-              <div className="bank wz-bank-compact">
-                {allTasks.map((t, i) => (
-                  <motion.div key={t.id} {...ciapMotion.projectCard} transition={ciapStagger(i, 0.02)}>
-                    <BankDraggable task={t} />
-                  </motion.div>
+              <input
+                type="search"
+                className="bank-search"
+                placeholder="Buscar…"
+                value={bankSearch}
+                onChange={(e) => setBankSearch(e.target.value)}
+              />
+              <div className="bank wz-bank-2col">
+                {filteredBank.map((t) => (
+                  <BankDraggable key={t.id} task={t} />
                 ))}
+                {filteredBank.length === 0 && (
+                  <p className="muted" style={{ fontSize: "var(--fs-xs)", gridColumn: "1/-1" }}>Nenhum card.</p>
+                )}
               </div>
             </div>
           </div>
 
-          {/* trilhas */}
+          {/* ── trilhas progressivas ── */}
           <div className="wz-flow-tracks">
-            {top5.map((crit, i) => {
+            {visibleTop5.map((crit, i) => {
               const chain = chains[crit.id] ?? [];
-              const skipped = skippedFlows.has(crit.id);
+              const comment = flowComments[crit.id] ?? "";
               return (
-                <motion.div key={crit.id} className="wz-flow-track-wrap" {...ciapMotion.onboardingY12} transition={ciapStagger(i, 0.07)}>
+                <motion.div
+                  key={crit.id}
+                  className="wz-flow-track-wrap"
+                  {...ciapMotion.onboardingY12}
+                  transition={ciapStagger(i, 0.07)}
+                >
                   <div className="wz-flow-track-hd">
-                    <span className="wz-top5-star">{i + 1}.</span>
+                    <span className="wz-flow-rank-badge">#{i + 1}</span>
                     <span className="wz-flow-crit-name">{formatTaskLabel(crit)}</span>
-                    <label className="wz-skip-label row-s" style={{ marginLeft: "auto" }}>
-                      <input type="checkbox" checked={skipped} onChange={() => dispatch({ type: "TOGGLE_SKIP_FLOW", critId: crit.id })} />
-                      <span style={{ fontSize: "var(--fs-xs)" }}>Pular</span>
-                    </label>
+                    {crit.etapa && <span className="wz-flow-etapa">{crit.etapa}</span>}
                   </div>
 
-                  {!skipped && (
-                    <>
-                      <FlowTrack
-                        critical={crit}
-                        taskById={taskById}
-                        chain={chain}
-                        onChange={(c) => dispatch({ type: "SET_CHAIN", critId: crit.id, chain: c })}
-                      />
-                      {/* botões "Adicionar" por clique */}
-                      <div className="wz-add-bar">
-                        {allTasks.slice(0, 8).map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            className="wz-add-chip"
-                            onClick={() => dispatch({ type: "SET_CHAIN", critId: crit.id, chain: [...chain, { id: uuid(), taskId: t.id }] })}
-                            title={`Adicionar: ${t.verb} ${t.textoPrincipal}`}
-                          >
-                            + {formatTaskLabel(t)}
-                          </button>
-                        ))}
-                        {allTasks.length > 8 && (
-                          <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>…arraste do banco para ver mais</span>
-                        )}
-                      </div>
-                    </>
-                  )}
-                  {skipped && <p className="muted" style={{ fontSize: "var(--fs-xs)", padding: "6px 0" }}>Fluxo pulado.</p>}
+                  <FlowTrack
+                    critical={crit}
+                    taskById={taskById}
+                    chain={chain}
+                    onChange={(c) => dispatch({ type: "SET_CHAIN", critId: crit.id, chain: c })}
+                  />
+
+                  {/* atalhos de clique rápido */}
+                  <div className="wz-quick-add">
+                    <span className="label-sm" style={{ color: "var(--ink-3)" }}>Adicionar rápido:</span>
+                    {allTasks.slice(0, 6).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className="wz-quick-chip"
+                        onClick={() => dispatch({
+                          type: "SET_CHAIN",
+                          critId: crit.id,
+                          chain: [...chain, { id: uuid(), taskId: t.id }],
+                        })}
+                      >
+                        + {(t.verb ?? "").toUpperCase()} {t.textoPrincipal}
+                      </button>
+                    ))}
+                    {allTasks.length > 6 && (
+                      <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>…mais no banco →</span>
+                    )}
+                  </div>
+
+                  {/* campo comentário */}
+                  <div className="wz-flow-comment">
+                    <label className="label-sm">
+                      Comentário sobre este fluxo
+                      <span className="muted" style={{ fontWeight: 400 }}> — dificuldades, tarefas faltantes, raciocínio (opcional)</span>
+                    </label>
+                    <textarea
+                      value={comment}
+                      onChange={(e) => dispatch({ type: "SET_FLOW_COMMENT", critId: crit.id, comment: e.target.value })}
+                      rows={2}
+                      placeholder="Ex: Achei difícil conectar com a etapa X…"
+                    />
+                  </div>
                 </motion.div>
               );
             })}
+
+            {/* botão adicionar próximo fluxo */}
+            {visibleFlowCount < Math.min(top5.length, 5) && (
+              <motion.div {...ciapMotion.nudgeY}>
+                <button
+                  type="button"
+                  className="btn wz-add-next-flow"
+                  onClick={() => dispatch({ type: "ADD_NEXT_FLOW" })}
+                >
+                  + Montar próximo fluxo (#{visibleFlowCount + 1} — opcional)
+                </button>
+              </motion.div>
+            )}
           </div>
         </div>
 
         <DragOverlay>
           {overlayTask ? (
-            <div style={{ width: 160, opacity: 0.92 }}>
-              <TaskCard task={overlayTask} />
+            <div className="bank-card-compact drag-overlay">
+              <span className="bc-verb">{(overlayTask.verb ?? "").toUpperCase()}</span>
+              <span className="bc-text">{overlayTask.textoPrincipal}</span>
             </div>
           ) : null}
         </DragOverlay>
@@ -565,8 +630,8 @@ function Step5({
   err: string | null;
   onSubmit: () => void;
 }) {
-  const { orderedSelected, hardestId, why, longText, chains, skippedFlows } = state;
-  const top5 = orderedSelected.slice(0, 5);
+  const { orderedSelected, hardestId, why, longText, chains, flowComments, visibleFlowCount } = state;
+  const top5 = orderedSelected.slice(0, visibleFlowCount);
   const [showAllRank, setShowAllRank] = useState(false);
   const visibleRank = showAllRank ? orderedSelected : orderedSelected.slice(0, 10);
 
@@ -607,15 +672,15 @@ function Step5({
         {top5.map((id, i) => {
           const t = taskById.get(id);
           const chain = chains[id] ?? [];
-          const skipped = skippedFlows.has(id);
+          const comment = flowComments[id] ?? "";
           return (
             <div key={id} className="wz-review-flow">
-              <span className="wz-top5-star">★{i + 1}</span>
-              <span className="wz-rank-text">{formatTaskLabel(t)}</span>
-              {skipped ? (
-                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>— pulado</span>
-              ) : chain.length === 0 ? (
-                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>— nenhum passo</span>
+              <div className="wz-review-flow-hd">
+                <span className="wz-flow-rank-badge">#{i + 1}</span>
+                <span className="wz-rank-text">{formatTaskLabel(t)}</span>
+              </div>
+              {chain.length === 0 ? (
+                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>— nenhum passo adicionado</span>
               ) : (
                 <div className="wz-review-chips">
                   {chain.map((e, si) => (
@@ -624,6 +689,11 @@ function Step5({
                     </span>
                   ))}
                 </div>
+              )}
+              {comment && (
+                <p className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 4, fontStyle: "italic" }}>
+                  "{comment}"
+                </p>
               )}
             </div>
           );
@@ -716,15 +786,19 @@ export function ParticipantPage() {
       if (state.step === 3) {
         let invalidHardest = false;
         let invalidText = false;
-        if (qHardest && (!state.hardestId || !state.why.trim())) {
-          invalidHardest = true;
-        }
-        if (qText && !state.longText.trim()) {
-          invalidText = true;
-        }
+        if (qHardest && (!state.hardestId || !state.why.trim())) invalidHardest = true;
+        if (qText && !state.longText.trim()) invalidText = true;
         if (invalidHardest || invalidText) {
           setInvalidStep3({ hardest: invalidHardest, text: invalidText });
           setStepErr("Preencha os campos obrigatórios destacados em vermelho.");
+          return;
+        }
+      }
+      if (state.step === 4) {
+        const visibleIds = state.orderedSelected.slice(0, state.visibleFlowCount);
+        const hasOne = visibleIds.some((id) => (state.chains[id] ?? []).length > 0);
+        if (!hasOne) {
+          setStepErr("Preencha ao menos 1 fluxo antes de avançar.");
           return;
         }
       }
@@ -746,12 +820,12 @@ export function ParticipantPage() {
     if (qHardest && state.hardestId) answers.push({ questionId: qHardest.id, taskId: state.hardestId, why: state.why });
     if (qText) answers.push({ questionId: qText.id, text: state.longText });
     if (qFlow) {
-      const flows = top5Tasks
-        .filter((t) => !state.skippedFlows.has(t.id))
-        .map((t) => ({
-          criticalTaskId: t.id,
-          stepTaskIds: (state.chains[t.id] ?? []).map((e) => e.taskId),
-        }));
+      const visibleTop5 = top5Tasks.slice(0, state.visibleFlowCount);
+      const flows = visibleTop5.map((t) => ({
+        criticalTaskId: t.id,
+        stepTaskIds: (state.chains[t.id] ?? []).map((e) => e.taskId),
+        comment: (state.flowComments[t.id] ?? "").trim(),
+      }));
       answers.push({ questionId: qFlow.id, flows });
     }
 
@@ -821,7 +895,10 @@ export function ParticipantPage() {
           {state.step === 4 && (
             <Step4
               top5={top5Tasks} taskById={taskById}
-              chains={state.chains} skippedFlows={state.skippedFlows} dispatch={dispatch}
+              chains={state.chains}
+              flowComments={state.flowComments}
+              visibleFlowCount={state.visibleFlowCount}
+              dispatch={dispatch}
             />
           )}
           {state.step === 5 && (
