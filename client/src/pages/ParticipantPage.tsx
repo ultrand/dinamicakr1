@@ -421,8 +421,24 @@ function Step4({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const [overlayTask, setOverlayTask] = useState<Task | null>(null);
   const [bankSearch, setBankSearch] = useState("");
+  const [activeCritId, setActiveCritId] = useState<string>("");
+  const [flashCritId, setFlashCritId] = useState<string>("");
 
   const visibleTop5 = top5.slice(0, visibleFlowCount);
+  useEffect(() => {
+    if (!visibleTop5.length) return;
+    if (!activeCritId || !visibleTop5.some((t) => t.id === activeCritId)) {
+      setActiveCritId(visibleTop5[0]!.id);
+    }
+  }, [visibleTop5, activeCritId]);
+
+  const addToFlow = (critId: string, taskId: string) => {
+    const cur = chains[critId] ?? [];
+    dispatch({ type: "SET_CHAIN", critId, chain: [...cur, { id: uuid(), taskId }] });
+    setFlashCritId(critId);
+    window.setTimeout(() => setFlashCritId((x) => (x === critId ? "" : x)), 700);
+  };
+
   const filteredBank = bankSearch
     ? allTasks.filter((t) =>
         `${t.verb} ${t.textoPrincipal} ${t.atividade} ${t.etapa}`
@@ -447,8 +463,7 @@ function Step4({
       const taskId = a.taskId;
       if (String(over.id).startsWith("append-")) {
         const critId = String(over.id).replace("append-", "");
-        const cur = chains[critId] ?? [];
-        dispatch({ type: "SET_CHAIN", critId, chain: [...cur, { id: uuid(), taskId }] });
+        addToFlow(critId, taskId);
         return;
       }
       if (o?.type === "sort") {
@@ -459,6 +474,7 @@ function Step4({
         const next = [...cur];
         next.splice(idx, 0, { id: uuid(), taskId });
         dispatch({ type: "SET_CHAIN", critId, chain: next });
+        setFlashCritId(critId);
         return;
       }
     }
@@ -513,7 +529,7 @@ function Step4({
               />
               <div className="bank wz-bank-2col">
                 {filteredBank.map((t) => (
-                  <BankDraggable key={t.id} task={t} />
+                  <BankDraggable key={t.id} task={t} onClick={() => activeCritId && addToFlow(activeCritId, t.id)} />
                 ))}
                 {filteredBank.length === 0 && (
                   <p className="muted" style={{ fontSize: "var(--fs-xs)", gridColumn: "1/-1" }}>Nenhum card.</p>
@@ -530,7 +546,8 @@ function Step4({
               return (
                 <motion.div
                   key={crit.id}
-                  className="wz-flow-track-wrap"
+                  className={`wz-flow-track-wrap${activeCritId === crit.id ? " active" : ""}${flashCritId === crit.id ? " flash" : ""}`}
+                  onClick={() => setActiveCritId(crit.id)}
                   {...ciapMotion.onboardingY12}
                   transition={ciapStagger(i, 0.07)}
                 >
@@ -538,6 +555,7 @@ function Step4({
                     <span className="wz-flow-rank-badge">#{i + 1}</span>
                     <span className="wz-flow-crit-name">{formatTaskLabel(crit)}</span>
                     {crit.etapa && <span className="wz-flow-etapa">{crit.etapa}</span>}
+                    {activeCritId === crit.id && <span className="badge badge-y">Destino de clique</span>}
                   </div>
 
                   <FlowTrack
@@ -555,11 +573,7 @@ function Step4({
                         key={t.id}
                         type="button"
                         className="wz-quick-chip"
-                        onClick={() => dispatch({
-                          type: "SET_CHAIN",
-                          critId: crit.id,
-                          chain: [...chain, { id: uuid(), taskId: t.id }],
-                        })}
+                        onClick={() => addToFlow(crit.id, t.id)}
                       >
                         + {(t.verb ?? "").toUpperCase()} {t.textoPrincipal}
                       </button>
@@ -603,9 +617,8 @@ function Step4({
 
         <DragOverlay>
           {overlayTask ? (
-            <div className="bank-card-compact drag-overlay">
-              <span className="bc-verb">{(overlayTask.verb ?? "").toUpperCase()}</span>
-              <span className="bc-text">{overlayTask.textoPrincipal}</span>
+            <div className="bank-card-compact tc-compact-wrap drag-overlay" style={{ width: 170 }}>
+              <TaskCard task={overlayTask} />
             </div>
           ) : null}
         </DragOverlay>
