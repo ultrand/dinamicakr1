@@ -41,7 +41,7 @@ const WIZARD_STEPS = [
 type Overview = {
   study: { id: string; name: string };
   draft: { id: string; tasks: Task[]; questions: Question[] };
-  publishedVersions: { id: string; number: number; publishedAt: string | null; label: string; _count: { responses: number } }[];
+  publishedVersions: { id: string; number: number; publishedAt: string | null; _count: { responses: number } }[];
 };
 
 /* ── Sortable question card ──────────────────────────────── */
@@ -148,7 +148,6 @@ export function AdminPage() {
   const [bulk,       setBulk]       = useState("");
   const [bulkOpen,   setBulkOpen]   = useState(false);
   const [dupLoading, setDupLoading] = useState<string | null>(null);
-  const [editLabel,  setEditLabel]  = useState<{ id: string; value: string } | null>(null);
 
   const authed = token.length > 0;
 
@@ -221,13 +220,6 @@ export function AdminPage() {
       flash("Rascunho criado."); await load();
     } catch (e) { setErr(e instanceof Error ? e.message : "Erro"); }
     finally { setDupLoading(null); }
-  };
-
-  const saveLabel = async (id: string, label: string) => {
-    try {
-      await apiSend(`/api/admin/versions/${id}/label`, "PATCH", { label }, token);
-      setEditLabel(null); flash("Nome salvo."); await load();
-    } catch (e) { setErr(e instanceof Error ? e.message : "Erro"); }
   };
 
   const exportUrl = (vId: string, fmt: "csv" | "json") =>
@@ -399,7 +391,7 @@ export function AdminPage() {
               <thead>
                 <tr>
                   <th style={{ width: 36 }}>v</th>
-                  <th>Nome / label</th>
+                  <th>Tipo</th>
                   <th>Publicada em</th>
                   <th style={{ width: 60 }}>Resp.</th>
                   <th>Export</th>
@@ -410,24 +402,7 @@ export function AdminPage() {
                 {(overview?.publishedVersions ?? []).map((v) => (
                   <tr key={v.id}>
                     <td><strong>v{v.number}</strong></td>
-                    <td>
-                      {editLabel?.id === v.id ? (
-                        <div className="row-s">
-                          <input value={editLabel.value} onChange={(e) => setEditLabel({ id: v.id, value: e.target.value })}
-                            style={{ width: 160 }} autoFocus />
-                          <button type="button" className="btn primary" style={{ fontSize: "0.7rem" }}
-                            onClick={() => void saveLabel(v.id, editLabel.value)}>✓</button>
-                          <button type="button" className="btn" style={{ fontSize: "0.7rem" }}
-                            onClick={() => setEditLabel(null)}>✕</button>
-                        </div>
-                      ) : (
-                        <button type="button" className="btn ghost" style={{ fontSize: "0.7rem", padding: "2px 6px" }}
-                          onClick={() => setEditLabel({ id: v.id, value: v.label })}>
-                          {v.label || <span className="muted">+ Nome</span>}
-                          &nbsp;✎
-                        </button>
-                      )}
-                    </td>
+                    <td><span className="badge">Oficial publicada</span></td>
                     <td>{v.publishedAt ? new Date(v.publishedAt).toLocaleString("pt-BR") : "—"}</td>
                     <td>{v._count.responses}</td>
                     <td>
