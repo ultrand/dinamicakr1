@@ -1312,6 +1312,29 @@ td input:focus, td select:focus {
   padding: 2px 6px;
   pointer-events: none;
 }
+.bank-card-flow-dots {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+.bank-card-flow-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #475569;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
 .tc-compact-wrap .tc { min-height: 92px; }
 .tc-compact-wrap .tc-top { padding: 6px 7px; }
 .tc-compact-wrap .tc-title { font-size: 11px; line-height: 1.25; }

@@ -18,11 +18,13 @@ export function BankDraggable({
   onClick,
   dimmed,
   activeFlowNumber,
+  otherFlowNumbers,
 }: {
   task: Task;
   onClick?: (task: Task) => void;
   dimmed?: boolean;
   activeFlowNumber?: number;
+  otherFlowNumbers?: number[];
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `bank-${task.id}`,
@@ -58,6 +60,13 @@ export function BankDraggable({
         ? `${task.verb} ${task.textoPrincipal} já está no fluxo ativo`
         : `Adicionar ${task.verb} ${task.textoPrincipal} ao fluxo ativo`}
     >
+      {!dimmed && (otherFlowNumbers?.length ?? 0) > 0 && (
+        <div className="bank-card-flow-dots" aria-hidden="true">
+          {otherFlowNumbers!.map((flowNum) => (
+            <span key={flowNum} className="bank-card-flow-dot">#{flowNum}</span>
+          ))}
+        </div>
+      )}
       {dimmed && typeof activeFlowNumber === "number" && (
         <span className="bank-card-used-tag">JA NO FLUXO #{activeFlowNumber}</span>
       )}

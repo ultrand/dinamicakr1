@@ -512,6 +512,17 @@ function Step4({
     : allTasks;
   const activeFlowNumber = Math.max(1, visibleTop5.findIndex((t) => t.id === activeCritId) + 1);
   const activeChainTaskIds = new Set((chains[activeCritId] ?? []).map((entry) => entry.taskId));
+  const taskOtherFlowNumbers = new Map<string, number[]>();
+  visibleTop5.forEach((crit, idx) => {
+    if (crit.id === activeCritId) return;
+    const flowNumber = idx + 1;
+    const uniqueTaskIds = new Set((chains[crit.id] ?? []).map((entry) => entry.taskId));
+    uniqueTaskIds.forEach((taskId) => {
+      const prev = taskOtherFlowNumbers.get(taskId) ?? [];
+      prev.push(flowNumber);
+      taskOtherFlowNumbers.set(taskId, prev);
+    });
+  });
 
   const onDragStart = (e: DragStartEvent) => {
     const d = e.active.data.current as { type?: string; taskId?: string } | undefined;
@@ -596,6 +607,7 @@ function Step4({
                     task={t}
                     dimmed={activeChainTaskIds.has(t.id)}
                     activeFlowNumber={activeFlowNumber}
+                    otherFlowNumbers={taskOtherFlowNumbers.get(t.id)}
                     onClick={() => activeCritId && addToFlow(activeCritId, t.id)}
                   />
                 ))}
