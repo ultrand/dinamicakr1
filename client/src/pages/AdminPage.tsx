@@ -292,14 +292,30 @@ export function AdminPage() {
     finally { setDupLoading(null); }
   };
 
-  const saveSettings = async () => {
+  const saveSettings = async (payload?: DynamicSettings) => {
+    const data = payload ?? settings;
     try {
-      await apiSend("/api/admin/settings", "PATCH", { settingsJson: JSON.stringify(settings) }, token);
-      flash("Textos e mínimos salvos no rascunho.");
+      await apiSend("/api/admin/settings", "PATCH", { settingsJson: JSON.stringify(data) }, token);
+      flash("Configuração salva no rascunho.");
       await load();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Erro");
     }
+  };
+
+  const restoreStep = async (n: 1 | 2 | 3 | 4 | 5) => {
+    const labels = [...settings.stepLabels] as DynamicSettings["stepLabels"];
+    labels[n - 1] = DEFAULT_SETTINGS.stepLabels[n - 1];
+    const next: DynamicSettings = {
+      ...settings,
+      stepLabels: labels,
+      [`step${n}Title`]: DEFAULT_SETTINGS[`step${n}Title` as keyof DynamicSettings] as string,
+      [`step${n}Sub`]: DEFAULT_SETTINGS[`step${n}Sub` as keyof DynamicSettings] as string,
+      ...(n === 1 ? { minCriticalSelected: DEFAULT_SETTINGS.minCriticalSelected } : {}),
+      ...(n === 4 ? { minFilledFlows: DEFAULT_SETTINGS.minFilledFlows } : {}),
+    };
+    setSettings(next);
+    await saveSettings(next);
   };
 
   const exportUrl = (vId: string, fmt: "csv" | "json") =>
@@ -375,88 +391,105 @@ export function AdminPage() {
       {/* ── TAB: Perguntas / Passos (wizard mirror) ── */}
       {tab === "wizard" && (
         <div className="stack-s">
-          <div className="panel">
-            <div className="panel-hd">Textos da dinâmica + mínimos por passo</div>
-            <div className="panel-body stack-s">
-              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <div className="field" style={{ flex: "1 1 140px" }}>
-                  <label>Rótulo passo 1</label>
-                  <input value={settings.stepLabels[0]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [e.target.value, s.stepLabels[1], s.stepLabels[2], s.stepLabels[3], s.stepLabels[4]] }))} />
-                </div>
-                <div className="field" style={{ flex: "1 1 140px" }}>
-                  <label>Rótulo passo 2</label>
-                  <input value={settings.stepLabels[1]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [s.stepLabels[0], e.target.value, s.stepLabels[2], s.stepLabels[3], s.stepLabels[4]] }))} />
-                </div>
-                <div className="field" style={{ flex: "1 1 140px" }}>
-                  <label>Rótulo passo 3</label>
-                  <input value={settings.stepLabels[2]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [s.stepLabels[0], s.stepLabels[1], e.target.value, s.stepLabels[3], s.stepLabels[4]] }))} />
-                </div>
-                <div className="field" style={{ flex: "1 1 140px" }}>
-                  <label>Rótulo passo 4</label>
-                  <input value={settings.stepLabels[3]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [s.stepLabels[0], s.stepLabels[1], s.stepLabels[2], e.target.value, s.stepLabels[4]] }))} />
-                </div>
-                <div className="field" style={{ flex: "1 1 140px" }}>
-                  <label>Rótulo passo 5</label>
-                  <input value={settings.stepLabels[4]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [s.stepLabels[0], s.stepLabels[1], s.stepLabels[2], s.stepLabels[3], e.target.value] }))} />
-                </div>
-              </div>
-              {([1, 2, 3, 4, 5] as const).map((n) => (
-                <div key={n} className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <div className="field" style={{ flex: "1 1 300px" }}>
-                    <label>Título passo {n}</label>
-                    <input value={settings[`step${n}Title` as keyof DynamicSettings] as string} onChange={(e) => setSettings((s) => ({ ...s, [`step${n}Title`]: e.target.value } as DynamicSettings))} />
-                  </div>
-                  <div className="field" style={{ flex: "2 1 420px" }}>
-                    <label>Subtítulo passo {n}</label>
-                    <input value={settings[`step${n}Sub` as keyof DynamicSettings] as string} onChange={(e) => setSettings((s) => ({ ...s, [`step${n}Sub`]: e.target.value } as DynamicSettings))} />
-                  </div>
-                </div>
-              ))}
-              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <div className="field" style={{ flex: "1 1 220px" }}>
-                  <label>Mínimo selecionadas no passo 1</label>
-                  <input type="number" min={1} value={settings.minCriticalSelected} onChange={(e) => setSettings((s) => ({ ...s, minCriticalSelected: Math.max(1, Number(e.target.value) || 1) }))} />
-                </div>
-                <div className="field" style={{ flex: "1 1 220px" }}>
-                  <label>Mínimo fluxos preenchidos no passo 4</label>
-                  <input type="number" min={1} value={settings.minFilledFlows} onChange={(e) => setSettings((s) => ({ ...s, minFilledFlows: Math.max(1, Number(e.target.value) || 1) }))} />
-                </div>
-              </div>
-              <div className="row-s">
-                <button type="button" className="btn primary" onClick={() => void saveSettings()}>Salvar textos e mínimos</button>
-                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>Isso salva no rascunho. Para o participante ver, publique.</span>
-              </div>
-            </div>
-          </div>
-
           <NewQuestionForm token={token} onCreated={() => void load()} />
 
           {qByStep.map((ws) => (
             <div key={ws.n} className="admin-wizard-step">
+
+              {/* ── cabeçalho: número + rótulo editável + regra ── */}
               <div className="admin-wstep-hd">
                 <span className="admin-wstep-n">Passo {ws.n}</span>
-                <span className="admin-wstep-label">{ws.label}</span>
+                <input
+                  className="admin-wstep-label-input"
+                  value={settings.stepLabels[ws.n - 1]}
+                  onChange={(e) => {
+                    const labels = [...settings.stepLabels] as DynamicSettings["stepLabels"];
+                    labels[ws.n - 1] = e.target.value;
+                    setSettings((s) => ({ ...s, stepLabels: labels }));
+                  }}
+                  title="Rótulo exibido na barra de progresso do participante"
+                />
                 <span className="muted admin-wstep-rule">{ws.rule}</span>
               </div>
 
+              {/* ── configuração do passo: título, subtítulo, mínimos ── */}
+              <div className="admin-step-config">
+                <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                  <div className="field" style={{ flex: "1 1 220px" }}>
+                    <label>Título exibido ao participante</label>
+                    <input
+                      value={settings[`step${ws.n}Title` as keyof DynamicSettings] as string}
+                      onChange={(e) => setSettings((s) => ({ ...s, [`step${ws.n}Title`]: e.target.value } as DynamicSettings))}
+                    />
+                  </div>
+                  <div className="field" style={{ flex: "2 1 360px" }}>
+                    <label>Subtítulo / instrução</label>
+                    <input
+                      value={settings[`step${ws.n}Sub` as keyof DynamicSettings] as string}
+                      onChange={(e) => setSettings((s) => ({ ...s, [`step${ws.n}Sub`]: e.target.value } as DynamicSettings))}
+                    />
+                  </div>
+                  {ws.n === 1 && (
+                    <div className="field" style={{ flex: "0 0 155px" }}>
+                      <label>Mínimo de tarefas selecionadas</label>
+                      <input
+                        type="number" min={1}
+                        value={settings.minCriticalSelected}
+                        onChange={(e) => setSettings((s) => ({ ...s, minCriticalSelected: Math.max(1, Number(e.target.value) || 1) }))}
+                      />
+                    </div>
+                  )}
+                  {ws.n === 4 && (
+                    <div className="field" style={{ flex: "0 0 155px" }}>
+                      <label>Mínimo de fluxos preenchidos</label>
+                      <input
+                        type="number" min={1}
+                        value={settings.minFilledFlows}
+                        onChange={(e) => setSettings((s) => ({ ...s, minFilledFlows: Math.max(1, Number(e.target.value) || 1) }))}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="row-s" style={{ marginTop: 10 }}>
+                  <button type="button" className="btn primary" onClick={() => void saveSettings()}>
+                    Salvar passo {ws.n}
+                  </button>
+                  <button type="button" className="btn" onClick={() => void restoreStep(ws.n as 1 | 2 | 3 | 4 | 5)}>
+                    ↺ Restaurar padrão
+                  </button>
+                  <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                    Salva no rascunho — publique para o participante ver.
+                  </span>
+                </div>
+              </div>
+
+              {/* ── perguntas ── */}
               {ws.n === 5 ? (
-                <p className="muted" style={{ fontSize: "var(--fs-xs)", padding: "6px 12px" }}>
+                <p className="muted" style={{ fontSize: "var(--fs-xs)", padding: "10px 14px" }}>
                   Tela de confirmação automática — sem pergunta configurável.
                 </p>
               ) : ws.questions.length === 0 ? (
-                <p className="muted" style={{ fontSize: "var(--fs-xs)", padding: "6px 12px" }}>
+                <p className="muted" style={{ fontSize: "var(--fs-xs)", padding: "10px 14px" }}>
                   Nenhuma pergunta deste passo no rascunho atual.
                 </p>
               ) : (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onReorder(e)}>
-                  <SortableContext items={ws.questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
-                    <div className="stack-s" style={{ padding: "0 0 8px" }}>
-                      {ws.questions.map((q) => (
-                        <SortableQ key={q.id} q={q} onSave={(id, p) => void saveQuestion(id, p)} />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
+                <>
+                  <div className="admin-step-q-divider">
+                    <span className="label-sm">Perguntas do passo</span>
+                    <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                      Arraste para reordenar · "Salvar" em cada card grava no rascunho
+                    </span>
+                  </div>
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onReorder(e)}>
+                    <SortableContext items={ws.questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
+                      <div className="stack-s" style={{ padding: "8px 14px 14px" }}>
+                        {ws.questions.map((q) => (
+                          <SortableQ key={q.id} q={q} onSave={(id, p) => void saveQuestion(id, p)} />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                </>
               )}
             </div>
           ))}

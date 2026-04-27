@@ -1500,6 +1500,50 @@ td input:focus, td select:focus {
 .admin-wstep-label { font-size: var(--fs-sm); font-weight: 700; color: var(--ink); }
 .admin-wstep-rule  { font-size: var(--fs-xs); color: var(--ink-3); flex: 1; }
 
+/* ── inline label input in step header ── */
+.admin-wstep-label-input {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 70px;
+  max-width: 150px;
+  flex-shrink: 0;
+}
+.admin-wstep-label-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(124,58,237,0.15);
+}
+
+/* ── per-step config panel ── */
+.admin-step-config {
+  padding: 12px 14px 14px;
+  background: rgba(124,58,237,0.03);
+  border-bottom: 1px solid var(--border-l);
+}
+
+/* ── questions divider ── */
+.admin-step-q-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 4px;
+  border-top: 1px solid var(--border-l);
+}
+.label-sm {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+}
+
 /* review flow atualizado */
 .wz-review-flow {
   display: flex;
