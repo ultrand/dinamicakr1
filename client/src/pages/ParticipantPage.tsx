@@ -476,13 +476,11 @@ function Step4({
   const [bankSearch, setBankSearch] = useState("");
   const [activeCritId, setActiveCritId] = useState<string>("");
   const [flashCritId, setFlashCritId] = useState<string>("");
+  const [dupToastCritId, setDupToastCritId] = useState<string>("");
 
   useEffect(() => {
-    const removeLegacyQuickAdd = () => {
-      const nodes = document.querySelectorAll(".wz-quick-add");
-      nodes.forEach((node) => node.remove());
-    };
-    removeLegacyQuickAdd();
+    const nodes = document.querySelectorAll(".wz-quick-add");
+    nodes.forEach((node) => node.remove());
   }, []);
 
   const visibleTop5 = top5.slice(0, visibleFlowCount);
@@ -495,6 +493,11 @@ function Step4({
 
   const addToFlow = (critId: string, taskId: string) => {
     const cur = chains[critId] ?? [];
+    if (cur.some((e) => e.taskId === taskId)) {
+      setDupToastCritId(critId);
+      window.setTimeout(() => setDupToastCritId(""), 2200);
+      return;
+    }
     dispatch({ type: "SET_CHAIN", critId, chain: [...cur, { id: uuid(), taskId }] });
     setFlashCritId(critId);
     window.setTimeout(() => setFlashCritId((x) => (x === critId ? "" : x)), 700);
@@ -603,7 +606,7 @@ function Step4({
               return (
                 <motion.div
                   key={crit.id}
-                  className={`wz-flow-track-wrap${activeCritId === crit.id ? " active" : ""}${flashCritId === crit.id ? " flash" : ""}`}
+                  className={`wz-flow-track-wrap${activeCritId === crit.id ? " active" : ""}${flashCritId === crit.id ? " flash" : ""}${dupToastCritId === crit.id ? " dup-shake" : ""}`}
                   onClick={() => setActiveCritId(crit.id)}
                   {...ciapMotion.onboardingY12}
                   transition={ciapStagger(i, 0.07)}
@@ -619,8 +622,24 @@ function Step4({
                     critical={crit}
                     taskById={taskById}
                     chain={chain}
+                    isActive={activeCritId === crit.id}
                     onChange={(c) => dispatch({ type: "SET_CHAIN", critId: crit.id, chain: c })}
                   />
+
+                  {/* toast duplicata */}
+                  <AnimatePresence>
+                    {dupToastCritId === crit.id && (
+                      <motion.div
+                        className="wz-dup-toast"
+                        initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.96 }}
+                        transition={{ duration: 0.18 }}
+                      >
+                        Card já está neste fluxo
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* campo comentário */}
                   <div className="wz-flow-comment">

@@ -107,8 +107,9 @@ function SortableStep({
 export function FlowDestCard({ task }: { task: Task }) {
   return (
     <div className="flow-dest-card">
-      <span className="flow-dest-label">CHEGAR EM</span>
+      <span className="flow-dest-bullseye">◎</span>
       <div className="flow-dest-body">
+        <span className="flow-dest-label">CHEGAR EM</span>
         <span className="flow-dest-verb">{(task.verb ?? "").toUpperCase()}</span>
         <span className="flow-dest-text">{task.textoPrincipal}</span>
         {task.atividade && <span className="flow-dest-meta">{task.atividade}</span>}
@@ -122,10 +123,11 @@ type Props = {
   critical: Task;
   taskById: Map<string, Task>;
   chain: ChainEntry[];
+  isActive?: boolean;
   onChange: (next: ChainEntry[]) => void;
 };
 
-export function FlowTrack({ critical, taskById, chain, onChange }: Props) {
+export function FlowTrack({ critical, taskById, chain, isActive, onChange }: Props) {
   return (
     <div className="flow-wrap-block">
       <SortableContext
@@ -133,7 +135,7 @@ export function FlowTrack({ critical, taskById, chain, onChange }: Props) {
         items={chain.map((c) => c.id)}
         strategy={rectSortingStrategy}
       >
-        <div className="flow-rail-wrap">
+        <div className={`flow-rail-wrap${isActive ? " active" : ""}`}>
           {chain.map((entry, idx) => {
           const t = taskById.get(entry.taskId);
           if (!t) return null;
@@ -152,7 +154,7 @@ export function FlowTrack({ critical, taskById, chain, onChange }: Props) {
           })}
 
           <AppendDrop criticalId={critical.id} />
-          <span className="flow-arrow-inline flow-arrow-dest">→</span>
+          <span className={`flow-arrow-inline flow-arrow-dest${isActive ? " flow-arrow-animated" : ""}`}>→</span>
           <FlowDestCard task={critical} />
         </div>
       </SortableContext>
