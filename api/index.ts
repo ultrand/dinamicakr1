@@ -8,7 +8,7 @@ let appPromise: Promise<(req: IncomingMessage, res: ServerResponse) => void> | n
 
 async function getApp() {
   if (!appPromise) {
-    appPromise = import("../server/src/app.js").then((m) => {
+    appPromise = import("../server/dist/app.js").then((m) => {
       console.log("[api] app module loaded, DATABASE_URL present:", !!process.env.DATABASE_URL);
       return m.createApp() as (req: IncomingMessage, res: ServerResponse) => void;
     });
@@ -23,6 +23,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   } catch (e) {
     console.error("[api] Failed to load app:", e);
     res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "App init failed", details: String(e) }));
+    res.end(JSON.stringify({ error: "App init failed" }));
   }
 }

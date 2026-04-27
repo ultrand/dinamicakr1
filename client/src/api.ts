@@ -69,9 +69,32 @@ export async function apiSend<T>(
   return undefined as T;
 }
 
-export function downloadUrl(path: string, token: string) {
-  const origin = base || window.location.origin;
-  const u = new URL(path, origin);
-  u.searchParams.set("token", token);
-  window.open(u.toString(), "_blank");
+function filenameFromDisposition(disposition: string | null, fallback: string) {
+  const match = disposition?.match(/filename="?(?<name>[^";]+)"?/i);
+  return match?.groups?.name ?? fallback;
+}
+
+export async function downloadFile(path: string, token: string, fallbackName: string) {
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  let r: Response;
+  try {
+    r = await fetch(`${base}${path}`, { headers });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Falha de rede";
+    throw new Error(`${msg}.${apiHint()}`);
+  }
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`${messageFromErrorBody(t, r.status)}${apiHint()}`);
+  }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filenameFromDisposition(r.headers.get("content-disposition"), fallbackName);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

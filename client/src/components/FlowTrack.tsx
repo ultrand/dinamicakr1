@@ -31,8 +31,15 @@ export function BankDraggable({ task, onClick }: { task: Task; onClick?: (task: 
       {...attributes}
       className="bank-card-compact tc-compact-wrap"
       onClick={() => onClick?.(task)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.(task);
+        }
+      }}
       role="button"
       tabIndex={0}
+      aria-label={`Adicionar ${task.verb} ${task.textoPrincipal} ao fluxo ativo`}
     >
       <TaskCard task={task} />
     </div>
@@ -83,13 +90,14 @@ function SortableStep({
         {...listeners}
         {...attributes}
         title="Arrastar para reordenar"
+        aria-label="Arrastar para reordenar"
       >⠿</button>
       <span className="flow-step-num-badge">{stepNum}</span>
       <div className="flow-step-card">
         <TaskCard task={task} />
       </div>
       <div className="flow-step-actions" onPointerDown={(e) => e.stopPropagation()}>
-        <button type="button" className="btn-icon danger" onClick={onRemove} title="Remover">✕</button>
+        <button type="button" className="btn-icon danger" onClick={onRemove} title="Remover" aria-label="Remover passo do fluxo">✕</button>
       </div>
     </div>
   );

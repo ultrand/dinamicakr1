@@ -8,9 +8,7 @@ export function adminAuth(req: Request, res: Response, next: NextFunction) {
   }
   const header = req.headers.authorization;
   const bearer = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
-  const query = typeof req.query.token === "string" ? req.query.token : undefined;
-  const sent = bearer ?? query;
-  if (sent !== token) {
+  if (bearer !== token) {
     res.status(401).json({ error: "Não autorizado" });
     return;
   }

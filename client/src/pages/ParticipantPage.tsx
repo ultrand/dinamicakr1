@@ -483,9 +483,6 @@ function Step4({
       nodes.forEach((node) => node.remove());
     };
     removeLegacyQuickAdd();
-    const observer = new MutationObserver(() => removeLegacyQuickAdd());
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
   }, []);
 
   const visibleTop5 = top5.slice(0, visibleFlowCount);
@@ -844,8 +841,8 @@ export function ParticipantPage() {
       if (state.step === 3) {
         let invalidHardest = false;
         let invalidText = false;
-        if (qHardest && (!state.hardestId || !state.why.trim())) invalidHardest = true;
-        if (qText && !state.longText.trim()) invalidText = true;
+        if (qHardest?.required && (!state.hardestId || !state.why.trim())) invalidHardest = true;
+        if (qText?.required && !state.longText.trim()) invalidText = true;
         if (invalidHardest || invalidText) {
           setInvalidStep3({ hardest: invalidHardest, text: invalidText });
           setStepErr("Preencha os campos obrigatórios destacados em vermelho.");
@@ -854,7 +851,6 @@ export function ParticipantPage() {
       }
       if (state.step === 4) {
         const visibleIds = state.orderedSelected.slice(0, state.visibleFlowCount);
-        const hasOne = visibleIds.some((id) => (state.chains[id] ?? []).length > 0);
         const filledCount = visibleIds.filter((id) => (state.chains[id] ?? []).length > 0).length;
         if (filledCount < dynamicSettings.minFilledFlows) {
           setStepErr(`Preencha ao menos ${dynamicSettings.minFilledFlows} fluxo(s) antes de avançar.`);

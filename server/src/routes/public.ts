@@ -1,8 +1,25 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { prisma } from "../lib/prisma.js";
 import { getLatestPublishedVersion, getOrCreateStudy } from "../services/studyService.js";
 
 export const publicRouter = Router();
+
+const responseRateLimit = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimitKey(req: Request) {
+  return req.ip || req.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+}
+
+function isRateLimited(key: string) {
+  const now = Date.now();
+  const current = responseRateLimit.get(key);
+  if (!current || current.resetAt <= now) {
+    responseRateLimit.set(key, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  current.count += 1;
+  return current.count > 30;
+}
 
 function parseSettingsMin(raw: string | undefined) {
   try {
@@ -37,8 +54,7 @@ publicRouter.get("/version", async (_req, res) => {
     res.json({ studyId: study.id, version: full });
   } catch (e) {
     console.error("[/version error]", e);
-    const msg = e instanceof Error ? e.message : String(e);
-    res.status(500).json({ error: "Falha ao carregar versão", details: msg });
+    res.status(500).json({ error: "Falha ao carregar versão" });
   }
 });
 
@@ -52,8 +68,16 @@ type AnswerIn = {
   flows?: { criticalTaskId: string; stepTaskIds: string[]; comment?: string }[];
 };
 
+function hasDuplicates(values: string[] | undefined) {
+  return Array.isArray(values) && new Set(values).size !== values.length;
+}
+
 publicRouter.post("/responses", async (req, res) => {
   try {
+    if (isRateLimited(rateLimitKey(req))) {
+      res.status(429).json({ error: "Muitas tentativas. Aguarde um minuto e tente novamente." });
+      return;
+    }
     const { studyVersionId, answers } = req.body as {
       studyVersionId: string;
       answers: AnswerIn[];
@@ -83,6 +107,12 @@ publicRouter.post("/responses", async (req, res) => {
     });
     const minima = parseSettingsMin(version.settingsJson);
     const qMap = new Map(questions.map((q) => [q.id, q]));
+
+    const invalidQuestionId = answers.find((a) => !qMap.has(a.questionId));
+    if (invalidQuestionId) {
+      res.status(400).json({ error: "Resposta enviada para pergunta inexistente nesta versão" });
+      return;
+    }
 
     const taskIds = new Set(
       (await prisma.task.findMany({ where: { studyVersionId }, select: { id: true } })).map((t) => t.id),
@@ -131,6 +161,10 @@ publicRouter.post("/responses", async (req, res) => {
 
     const criticalQ = questions.find((q) => q.type === "critical_select");
     const selected = answers.find((x) => x.questionId === criticalQ?.id)?.criticalTaskIds ?? [];
+    if (hasDuplicates(selected)) {
+      res.status(400).json({ error: "Seleção contém cards duplicados" });
+      return;
+    }
     for (const tid of selected) {
       if (!taskIds.has(tid)) {
         res.status(400).json({ error: "Card inválido na seleção" });
@@ -150,6 +184,20 @@ publicRouter.post("/responses", async (req, res) => {
     const rankQ = questions.find((q) => q.type === "critical_rank");
     const rankAns = answers.find((x) => x.questionId === rankQ?.id);
     const orderedIds = rankAns?.orderedCriticalTaskIds ?? selected;
+    if (hasDuplicates(orderedIds)) {
+      res.status(400).json({ error: "Ranking contém cards duplicados" });
+      return;
+    }
+    for (const tid of orderedIds) {
+      if (!taskIds.has(tid)) {
+        res.status(400).json({ error: "Card inválido no ranking" });
+        return;
+      }
+      if (selectedSet.size > 0 && !selectedSet.has(tid)) {
+        res.status(400).json({ error: "Ranking deve usar apenas tarefas críticas selecionadas" });
+        return;
+      }
+    }
     const top5Set = new Set(orderedIds.slice(0, 5));
 
     const flowQ = questions.find((q) => q.type === "flow_builder_per_critical");
@@ -161,6 +209,16 @@ publicRouter.post("/responses", async (req, res) => {
           res.status(400).json({ error: "Fluxos só podem usar críticas selecionadas" });
           return;
         }
+        if (hasDuplicates(f.stepTaskIds)) {
+          res.status(400).json({ error: "Fluxo contém cards duplicados" });
+          return;
+        }
+        for (const tid of f.stepTaskIds) {
+          if (!taskIds.has(tid)) {
+            res.status(400).json({ error: "Card inválido no fluxo" });
+            return;
+          }
+        }
       }
     }
 
@@ -171,7 +229,7 @@ publicRouter.post("/responses", async (req, res) => {
 
       for (const a of answers) {
         const q = qMap.get(a.questionId);
-        if (!q) continue;
+        if (!q) throw new Error("question");
 
         if (q.type === "critical_select" && a.criticalTaskIds) {
           for (const tid of a.criticalTaskIds) {

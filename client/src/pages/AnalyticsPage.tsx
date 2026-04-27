@@ -39,18 +39,33 @@ export function AnalyticsPage() {
   const [critChoices,  setCritChoices]  = useState<{ id: string; label: string }[]>([]);
   const [data,         setData]         = useState<Analytics | null>(null);
   const [err,          setErr]          = useState<string | null>(null);
+  const [loadingVersions, setLoadingVersions] = useState(true);
+  const [loadingData, setLoadingData] = useState(false);
   const [section,      setSection]      = useState<"ranking" | "fluxos" | "grafo">("ranking");
 
   const loadVers = useCallback(async () => {
     if (!token) return;
-    const v = await apiGet<Ver[]>("/api/admin/versions", token);
-    setVersions(v);
-    setVersionId((cur) => (cur && v.some((x) => x.id === cur) ? cur : v[0]?.id ?? ""));
+    setLoadingVersions(true);
+    setErr(null);
+    try {
+      const v = await apiGet<Ver[]>("/api/admin/versions", token);
+      setVersions(v);
+      setVersionId((cur) => (cur && v.some((x) => x.id === cur) ? cur : v[0]?.id ?? ""));
+      if (v.length === 0) setData(null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Erro");
+      setVersions([]);
+      setVersionId("");
+      setData(null);
+    } finally {
+      setLoadingVersions(false);
+    }
   }, [token]);
 
   const loadData = useCallback(async () => {
-    if (!token || !versionId) return;
+    if (!token || !versionId) { setData(null); return; }
     setErr(null);
+    setLoadingData(true);
     try {
       const q = new URLSearchParams({ versionId });
       if (critFilter) q.set("criticalTaskId", critFilter);
@@ -60,6 +75,7 @@ export function AnalyticsPage() {
         setCritChoices(a.commonPathByCritical.map((c) => ({ id: c.criticalTaskId, label: c.criticalLabel })));
       }
     } catch (e) { setErr(e instanceof Error ? e.message : "Erro"); setData(null); }
+    finally { setLoadingData(false); }
   }, [token, versionId, critFilter]);
 
   useEffect(() => { void loadVers(); }, [loadVers]);
@@ -80,14 +96,17 @@ export function AnalyticsPage() {
     <motion.div className="page" {...ciapMotion.sectionFade}>
       <div className="row spread" style={{ marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>Análise agregada</h1>
-        <Link to="/admin" className="btn ghost">← Admin</Link>
+        <div className="row-s">
+          <Link to="/admin/export" className="btn ghost">Exportar</Link>
+          <Link to="/admin" className="btn ghost">← Admin</Link>
+        </div>
       </div>
 
       {/* filtros */}
       <div className="row" style={{ marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
         <div className="field">
           <label>Versão</label>
-          <select value={versionId} onChange={(e) => setVersionId(e.target.value)} style={{ width: 200 }}>
+          <select value={versionId} onChange={(e) => setVersionId(e.target.value)} style={{ width: 200 }} disabled={versions.length === 0}>
             {versions.map((v) => (
               <option key={v.id} value={v.id}>
                 v{v.number} — {v._count.responses} resp.
@@ -116,7 +135,18 @@ export function AnalyticsPage() {
         ))}
       </div>
 
-      {data ? (
+      {loadingVersions ? (
+        <p className="muted">Carregando versões…</p>
+      ) : versions.length === 0 ? (
+        <div className="panel">
+          <div className="panel-hd">Nenhuma versão publicada</div>
+          <div className="panel-body">
+            <p className="muted">Publique um rascunho no Admin para liberar o participante e começar a coletar resultados.</p>
+          </div>
+        </div>
+      ) : loadingData ? (
+        <p className="muted">Carregando análise…</p>
+      ) : data ? (
         <>
           {section === "ranking" && (
             <div className="stack-s">
@@ -244,6 +274,11 @@ export function AnalyticsPage() {
             <div className="panel">
               <div className="panel-hd">Grafo de transições A → B (espessura = frequência)</div>
               <div className="panel-body">
+                {data.graph.edges.length > 60 && (
+                  <p className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 0 }}>
+                    Mostrando as 60 transições mais fortes de {data.graph.edges.length}.
+                  </p>
+                )}
                 {data.graph.edges.slice(0, 60).map((e) => (
                   <div key={`${e.from}-${e.to}`} className="graph-edge">
                     <span className="rank-n" style={{ width: "auto" }}>{e.weight}×</span>
@@ -260,7 +295,7 @@ export function AnalyticsPage() {
           )}
         </>
       ) : (
-        <p className="muted">Carregando…</p>
+        <p className="muted">Sem dados para esta versão.</p>
       )}
     </motion.div>
   );

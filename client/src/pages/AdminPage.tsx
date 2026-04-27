@@ -16,7 +16,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { apiGet, apiSend } from "../api";
+import { apiGet, apiSend, downloadFile } from "../api";
 import { ciapMotion } from "../ciap-motion";
 import type { Question, Task } from "../types";
 
@@ -101,7 +101,15 @@ function parseSettings(raw: string | undefined): DynamicSettings {
 }
 
 /* ── Sortable question card ──────────────────────────────── */
-function SortableQ({ q, onSave }: { q: Question; onSave: (id: string, patch: Partial<Question>) => void }) {
+function SortableQ({
+  q,
+  onSave,
+  onDelete,
+}: {
+  q: Question;
+  onSave: (id: string, patch: Partial<Question>) => void;
+  onDelete: (id: string, title: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: q.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.55 : 1 };
   const [title,    setTitle]    = useState(q.title);
@@ -133,21 +141,33 @@ function SortableQ({ q, onSave }: { q: Question; onSave: (id: string, patch: Par
           onClick={() => onSave(q.id, { title, helpText: help, required })}>
           Salvar
         </button>
+        <button type="button" className="btn danger" style={{ whiteSpace: "nowrap" }}
+          onClick={() => onDelete(q.id, title)}>
+          Excluir
+        </button>
       </div>
     </div>
   );
 }
 
 /* ── Nova pergunta ───────────────────────────────────────── */
-function NewQuestionForm({ token, onCreated }: { token: string; onCreated: () => void }) {
+function NewQuestionForm({ token, existingTypes, onCreated }: { token: string; existingTypes: Set<string>; onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState("critical_select");
   const [title, setTitle] = useState("");
   const [help, setHelp] = useState("");
   const [required, setRequired] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const availableTypes = Q_TYPES.filter((qt) => !existingTypes.has(qt.value));
+  useEffect(() => {
+    if (availableTypes.length > 0 && existingTypes.has(type)) setType(availableTypes[0]!.value);
+  }, [availableTypes, existingTypes, type]);
   const submit = async () => {
     setErr(null);
+    if (existingTypes.has(type)) {
+      setErr("Este tipo de pergunta já existe no rascunho. O participante usa uma pergunta por tipo.");
+      return;
+    }
     try {
       await apiSend("/api/admin/questions", "POST", { type, title, helpText: help, required }, token);
       setTitle(""); setHelp(""); setOpen(false); onCreated();
@@ -166,9 +186,10 @@ function NewQuestionForm({ token, onCreated }: { token: string; onCreated: () =>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <div className="field" style={{ flex: "1 1 200px" }}>
             <label>Tipo</label>
-            <select value={type} onChange={(e) => setType(e.target.value)}>
-              {Q_TYPES.map((qt) => <option key={qt.value} value={qt.value}>{qt.label} (Passo {qt.step})</option>)}
+            <select value={type} onChange={(e) => setType(e.target.value)} disabled={availableTypes.length === 0}>
+              {availableTypes.map((qt) => <option key={qt.value} value={qt.value}>{qt.label} (Passo {qt.step})</option>)}
             </select>
+            {availableTypes.length === 0 && <p className="muted" style={{ fontSize: "var(--fs-xs)", margin: "4px 0 0" }}>Todos os tipos essenciais já existem.</p>}
           </div>
           <div className="field" style={{ flex: "2 1 280px" }}>
             <label>Título</label>
@@ -184,7 +205,7 @@ function NewQuestionForm({ token, onCreated }: { token: string; onCreated: () =>
             <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} />
             <span>Obrigatória</span>
           </label>
-          <button type="button" className="btn primary" onClick={() => void submit()}>Criar</button>
+          <button type="button" className="btn primary" disabled={availableTypes.length === 0} onClick={() => void submit()}>Criar</button>
           <button type="button" className="btn" onClick={() => setOpen(false)}>Cancelar</button>
         </div>
       </div>
@@ -246,6 +267,15 @@ export function AdminPage() {
       await load();
     }
     catch (e) { setErr(e instanceof Error ? e.message : "Erro"); }
+  };
+
+  const deleteQuestion = async (id: string, title: string) => {
+    if (!confirm(`Excluir pergunta "${title || "sem título"}" do rascunho?`)) return;
+    try {
+      await apiSend(`/api/admin/questions/${id}`, "DELETE", {}, token);
+      flash("Pergunta excluída do rascunho. Confira os tipos obrigatórios antes de publicar.");
+      await load();
+    } catch (e) { setErr(e instanceof Error ? e.message : "Erro"); }
   };
 
   const publish = async () => {
@@ -318,8 +348,19 @@ export function AdminPage() {
     await saveSettings(next);
   };
 
-  const exportUrl = (vId: string, fmt: "csv" | "json") =>
-    `/api/admin/export/${fmt}?versionId=${vId}&token=${encodeURIComponent(token)}`;
+  const downloadExport = async (vId: string, fmt: "csv" | "json") => {
+    try {
+      await downloadFile(`/api/admin/export/${fmt}?versionId=${encodeURIComponent(vId)}`, token, `responses-${vId}.${fmt}`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Erro ao exportar");
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem(LS);
+    setToken("");
+    setOverview(null);
+  };
 
   const filteredTasks = (overview?.draft.tasks ?? []).filter((t) => {
     const s = qSearch.toLowerCase();
@@ -335,6 +376,7 @@ export function AdminPage() {
       return (info?.step ?? 0) === ws.n;
     }),
   }));
+  const existingQuestionTypes = new Set(sortedQ.map((q) => q.type));
 
   /* ── login ── */
   if (!authed) return (
@@ -356,8 +398,9 @@ export function AdminPage() {
         <h1 style={{ margin: 0 }}>Admin</h1>
         <div className="row-s">
           <Link to="/admin/analise" className="btn ghost">Análise</Link>
+          <Link to="/admin/export" className="btn ghost">Exportar</Link>
           <button type="button" className="btn ghost" onClick={() => void publish()}>↑ Publicar</button>
-          <button type="button" className="btn ghost" onClick={() => setToken("")}>Sair</button>
+          <button type="button" className="btn ghost" onClick={logout}>Sair</button>
         </div>
       </div>
 
@@ -391,7 +434,7 @@ export function AdminPage() {
       {/* ── TAB: Perguntas / Passos (wizard mirror) ── */}
       {tab === "wizard" && (
         <div className="stack-s">
-          <NewQuestionForm token={token} onCreated={() => void load()} />
+          <NewQuestionForm token={token} existingTypes={existingQuestionTypes} onCreated={() => void load()} />
 
           {qByStep.map((ws) => (
             <div key={ws.n} className="admin-wizard-step">
@@ -484,7 +527,12 @@ export function AdminPage() {
                     <SortableContext items={ws.questions.map((q) => q.id)} strategy={verticalListSortingStrategy}>
                       <div className="stack-s" style={{ padding: "8px 14px 14px" }}>
                         {ws.questions.map((q) => (
-                          <SortableQ key={q.id} q={q} onSave={(id, p) => void saveQuestion(id, p)} />
+                          <SortableQ
+                            key={q.id}
+                            q={q}
+                            onSave={(id, p) => void saveQuestion(id, p)}
+                            onDelete={(id, title) => void deleteQuestion(id, title)}
+                          />
                         ))}
                       </div>
                     </SortableContext>
@@ -579,10 +627,10 @@ export function AdminPage() {
                     <td>{v._count.responses}</td>
                     <td>
                       <div className="row-s">
-                        <a className="btn ghost" style={{ fontSize: "0.7rem", padding: "2px 6px" }}
-                          href={exportUrl(v.id, "csv")} download>CSV</a>
-                        <a className="btn ghost" style={{ fontSize: "0.7rem", padding: "2px 6px" }}
-                          href={exportUrl(v.id, "json")} download>JSON</a>
+                        <button type="button" className="btn ghost" style={{ fontSize: "0.7rem", padding: "2px 6px" }}
+                          onClick={() => void downloadExport(v.id, "csv")}>CSV</button>
+                        <button type="button" className="btn ghost" style={{ fontSize: "0.7rem", padding: "2px 6px" }}
+                          onClick={() => void downloadExport(v.id, "json")}>JSON</button>
                       </div>
                     </td>
                     <td>

@@ -10,7 +10,7 @@ Aplicativo web para dinâmica de equipe: seleção de tarefas críticas (“cabe
 
 ## Pré-requisitos
 
-- Node.js 20+ (recomendado)
+- Node.js 22+ (recomendado, alinhado ao deploy)
 - PostgreSQL local (ex.: `docker compose up -d db` na raiz — ver `docker-compose.yml`)
 
 ## Um comando (desenvolvimento)

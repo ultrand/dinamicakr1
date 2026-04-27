@@ -39,10 +39,9 @@ adminRouter.post("/publish", async (_req, res) => {
       res.status(400).json({ error: "Sem rascunho" });
       return;
     }
-    const taskCount = await prisma.task.count({ where: { studyVersionId: draft.id } });
-    const qCount = await prisma.question.count({ where: { studyVersionId: draft.id } });
-    if (taskCount === 0 || qCount === 0) {
-      res.status(400).json({ error: "Rascunho precisa de cards e perguntas" });
+    const publishError = await validatePublishableDraft(draft.id);
+    if (publishError) {
+      res.status(400).json({ error: publishError });
       return;
     }
     const body = _req.body as { label?: unknown };
@@ -229,7 +228,34 @@ adminRouter.delete("/tasks/:id", async (req, res) => {
   }
 });
 
-const Q_TYPES = new Set(["critical_select", "critical_rank", "hardest_critical", "text_long", "flow_builder_per_critical"]);
+const CORE_Q_TYPES = ["critical_select", "critical_rank", "hardest_critical", "text_long", "flow_builder_per_critical"] as const;
+const Q_TYPES = new Set<string>(CORE_Q_TYPES);
+
+async function validatePublishableDraft(draftId: string) {
+  const [taskCount, questions] = await Promise.all([
+    prisma.task.count({ where: { studyVersionId: draftId, inactive: false } }),
+    prisma.question.findMany({ where: { studyVersionId: draftId }, select: { type: true } }),
+  ]);
+  if (taskCount === 0) return "Rascunho precisa de ao menos 1 card ativo";
+  const counts = new Map<string, number>();
+  for (const q of questions) counts.set(q.type, (counts.get(q.type) ?? 0) + 1);
+  const missing = CORE_Q_TYPES.filter((type) => !counts.has(type));
+  if (missing.length) return `Perguntas obrigatórias ausentes: ${missing.join(", ")}`;
+  const duplicated = CORE_Q_TYPES.filter((type) => (counts.get(type) ?? 0) > 1);
+  if (duplicated.length) return `Há perguntas duplicadas para: ${duplicated.join(", ")}. O participante usa uma pergunta por tipo.`;
+  return null;
+}
+
+function csvCell(value: unknown) {
+  const raw = value == null ? "" : String(value);
+  const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+async function ensurePublishedVersion(versionId: string) {
+  const study = await getOrCreateStudy();
+  return prisma.studyVersion.findFirst({ where: { id: versionId, studyId: study.id, isDraft: false } });
+}
 
 adminRouter.post("/questions", async (req, res) => {
   try {
@@ -238,6 +264,13 @@ adminRouter.post("/questions", async (req, res) => {
     const { type, title, helpText, required, sortOrder } = req.body as Record<string, unknown>;
     if (!Q_TYPES.has(String(type))) {
       res.status(400).json({ error: "Tipo inválido" });
+      return;
+    }
+    const existing = await prisma.question.findFirst({
+      where: { studyVersionId: draft.id, type: String(type) },
+    });
+    if (existing) {
+      res.status(409).json({ error: "Este tipo de pergunta já existe no rascunho" });
       return;
     }
     const max = await prisma.question.aggregate({
@@ -276,6 +309,15 @@ adminRouter.patch("/questions/:id", async (req, res) => {
     if (type !== undefined && !Q_TYPES.has(String(type))) {
       res.status(400).json({ error: "Tipo inválido" });
       return;
+    }
+    if (type !== undefined && String(type) !== q.type) {
+      const existing = await prisma.question.findFirst({
+        where: { studyVersionId: draft.id, type: String(type), NOT: { id: q.id } },
+      });
+      if (existing) {
+        res.status(409).json({ error: "Este tipo de pergunta já existe no rascunho" });
+        return;
+      }
     }
     const updated = await prisma.question.update({
       where: { id: q.id },
@@ -370,6 +412,8 @@ adminRouter.get("/export/csv", async (req, res) => {
   try {
     const versionId = typeof req.query.versionId === "string" ? req.query.versionId : undefined;
     if (!versionId) { res.status(400).json({ error: "versionId obrigatório" }); return; }
+    const version = await ensurePublishedVersion(versionId);
+    if (!version) { res.status(404).json({ error: "Versão publicada inválida" }); return; }
 
     const responses = await prisma.response.findMany({
       where: { studyVersionId: versionId },
@@ -377,35 +421,64 @@ adminRouter.get("/export/csv", async (req, res) => {
         criticalSelections: true,
         criticalRanks: { orderBy: { position: "asc" } },
         criticalDifficulty: true,
-        conceptualDifficulties: { include: { question: { select: { type: true } } } },
+        conceptualDifficulties: { include: { question: { select: { id: true, type: true, title: true } } } },
         paths: { include: { steps: { orderBy: { stepIndex: "asc" } } } },
       },
       orderBy: { createdAt: "asc" },
     });
 
     const lines = [
-      "response_id,created_at,selected_task_ids,ranked_task_ids,hardest_task_id,hardest_why,long_text,critical_task_id,flow_steps",
+      [
+        "response_id",
+        "created_at",
+        "selected_task_ids",
+        "ranked_task_ids",
+        "hardest_task_id",
+        "hardest_why",
+        "long_texts_json",
+        "critical_task_id",
+        "flow_steps",
+        "flow_comment",
+      ].map(csvCell).join(","),
     ];
     for (const r of responses) {
       const selected = r.criticalSelections.map((s) => s.taskId).join("|");
       const ranked = r.criticalRanks.map((x) => `${x.position}:${x.taskId}`).join("|");
-      const hardestWhy = (r.criticalDifficulty?.whyText ?? "").replace(/"/g, '""');
-      const longText = (
-        r.conceptualDifficulties.find((c) => c.question.type === "text_long")?.text ?? ""
-      ).replace(/"/g, '""');
+      const longTexts = r.conceptualDifficulties.map((c) => ({
+        questionId: c.questionId,
+        type: c.question.type,
+        title: c.question.title,
+        text: c.text,
+      }));
 
       if (r.paths.length === 0) {
-        lines.push(
-          `${r.id},${r.createdAt.toISOString()},"${selected}","${ranked}",` +
-          `${r.criticalDifficulty?.taskId ?? ""},"${hardestWhy}","${longText}",,`,
-        );
+        lines.push([
+          r.id,
+          r.createdAt.toISOString(),
+          selected,
+          ranked,
+          r.criticalDifficulty?.taskId ?? "",
+          r.criticalDifficulty?.whyText ?? "",
+          JSON.stringify(longTexts),
+          "",
+          "",
+          "",
+        ].map(csvCell).join(","));
       } else {
         for (const p of r.paths) {
           const steps = p.steps.map((s) => s.taskId).join("|");
-          lines.push(
-            `${r.id},${r.createdAt.toISOString()},"${selected}","${ranked}",` +
-            `${r.criticalDifficulty?.taskId ?? ""},"${hardestWhy}","${longText}",${p.criticalTaskId},"${steps}"`,
-          );
+          lines.push([
+            r.id,
+            r.createdAt.toISOString(),
+            selected,
+            ranked,
+            r.criticalDifficulty?.taskId ?? "",
+            r.criticalDifficulty?.whyText ?? "",
+            JSON.stringify(longTexts),
+            p.criticalTaskId,
+            steps,
+            p.comment,
+          ].map(csvCell).join(","));
         }
       }
     }
@@ -423,6 +496,8 @@ adminRouter.get("/export/json", async (req, res) => {
   try {
     const versionId = typeof req.query.versionId === "string" ? req.query.versionId : undefined;
     if (!versionId) { res.status(400).json({ error: "versionId obrigatório" }); return; }
+    const version = await ensurePublishedVersion(versionId);
+    if (!version) { res.status(404).json({ error: "Versão publicada inválida" }); return; }
 
     const responses = await prisma.response.findMany({
       where: { studyVersionId: versionId },
@@ -430,7 +505,7 @@ adminRouter.get("/export/json", async (req, res) => {
         criticalSelections: true,
         criticalRanks: { orderBy: { position: "asc" } },
         criticalDifficulty: true,
-        conceptualDifficulties: { include: { question: { select: { type: true } } } },
+        conceptualDifficulties: { include: { question: { select: { id: true, type: true, title: true } } } },
         paths: { include: { steps: { orderBy: { stepIndex: "asc" } } } },
       },
       orderBy: { createdAt: "asc" },
@@ -443,10 +518,16 @@ adminRouter.get("/export/json", async (req, res) => {
       orderedCriticalTaskIds: r.criticalRanks.map((x) => ({ taskId: x.taskId, position: x.position })),
       hardestTaskId: r.criticalDifficulty?.taskId ?? null,
       hardestWhy: r.criticalDifficulty?.whyText ?? null,
-      longText: r.conceptualDifficulties.find((c) => c.question.type === "text_long")?.text ?? null,
+      longTexts: r.conceptualDifficulties.map((c) => ({
+        questionId: c.questionId,
+        type: c.question.type,
+        title: c.question.title,
+        text: c.text,
+      })),
       flows: r.paths.map((p) => ({
         criticalTaskId: p.criticalTaskId,
         steps: p.steps.map((s) => s.taskId),
+        comment: p.comment,
       })),
     }));
 
