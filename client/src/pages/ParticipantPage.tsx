@@ -616,6 +616,7 @@ function Step4({
                   key={crit.id}
                   className={`wz-flow-track-wrap${activeCritId === crit.id ? " active" : ""}${flashCritId === crit.id ? " flash" : ""}${dupToastCritId === crit.id ? " dup-shake" : ""}`}
                   onClick={() => setActiveCritId(crit.id)}
+                  onPointerDown={() => setActiveCritId(crit.id)}
                   {...ciapMotion.onboardingY12}
                   transition={ciapStagger(i, 0.07)}
                 >

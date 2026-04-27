@@ -67,14 +67,19 @@ export function BankDraggable({
 }
 
 /* ── Append drop zone (bottom of vertical rail) ─────────── */
-function AppendDrop({ criticalId }: { criticalId: string }) {
+function AppendDrop({ criticalId, isEmpty }: { criticalId: string; isEmpty: boolean }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `append-${criticalId}`,
     data: { type: "append" as const, criticalId },
   });
   return (
-    <div ref={setNodeRef} className={`flow-drop-wrap${isOver ? " over" : ""}`}>
-      + solte aqui
+    <div
+      ref={setNodeRef}
+      className={`flow-drop-wrap${isOver ? " over" : ""}${isEmpty ? " empty" : " compact"}`}
+      aria-label="Solte aqui para adicionar ao fim do fluxo"
+      title="Solte aqui para adicionar ao fim do fluxo"
+    >
+      {isEmpty ? "+ solte aqui" : "+"}
     </div>
   );
 }
@@ -107,13 +112,11 @@ function SortableStep({
       <button
         type="button"
         className="flow-step-drag"
-        {...listeners}
-        {...attributes}
-        title="Arrastar para reordenar"
-        aria-label="Arrastar para reordenar"
+        title="Arraste o card para reordenar"
+        aria-label="Arraste o card para reordenar"
       >⠿</button>
       <span className="flow-step-num-badge">{stepNum}</span>
-      <div className="flow-step-card">
+      <div className="flow-step-card" {...listeners} {...attributes}>
         <TaskCard task={task} />
       </div>
       <div className="flow-step-actions" onPointerDown={(e) => e.stopPropagation()}>
@@ -173,7 +176,7 @@ export function FlowTrack({ critical, taskById, chain, isActive, onChange }: Pro
           );
           })}
 
-          <AppendDrop criticalId={critical.id} />
+          <AppendDrop criticalId={critical.id} isEmpty={chain.length === 0} />
           <span className={`flow-arrow-inline flow-arrow-dest${isActive ? " flow-arrow-animated" : ""}`}>→</span>
           <FlowDestCard task={critical} />
         </div>
