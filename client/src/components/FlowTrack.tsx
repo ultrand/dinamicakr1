@@ -25,11 +25,12 @@ export function BankDraggable({
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `bank-${task.id}`,
     data: { type: "bank" as const, taskId: task.id },
+    disabled: !!dimmed,
   });
   const style: CSSProperties = {
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.25 : 1,
-    cursor: "grab",
+    cursor: dimmed ? "not-allowed" : "grab",
   };
   return (
     <div
@@ -38,16 +39,22 @@ export function BankDraggable({
       {...listeners}
       {...attributes}
       className={`bank-card-compact tc-compact-wrap${dimmed ? " is-dimmed" : ""}`}
-      onClick={() => onClick?.(task)}
+      onClick={() => {
+        if (!dimmed) onClick?.(task);
+      }}
       onKeyDown={(e) => {
+        if (dimmed) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onClick?.(task);
         }
       }}
       role="button"
-      tabIndex={0}
-      aria-label={`Adicionar ${task.verb} ${task.textoPrincipal} ao fluxo ativo`}
+      tabIndex={dimmed ? -1 : 0}
+      aria-disabled={dimmed ? "true" : "false"}
+      aria-label={dimmed
+        ? `${task.verb} ${task.textoPrincipal} já está no fluxo ativo`
+        : `Adicionar ${task.verb} ${task.textoPrincipal} ao fluxo ativo`}
     >
       <TaskCard task={task} />
     </div>
