@@ -1,6 +1,26 @@
 import { prisma } from "../lib/prisma.js";
 
+let ensureCompatPromise: Promise<void> | null = null;
+
+async function ensureSchemaCompat() {
+  if (!ensureCompatPromise) {
+    ensureCompatPromise = (async () => {
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "StudyVersion" ADD COLUMN IF NOT EXISTS "label" TEXT NOT NULL DEFAULT \'\'',
+      );
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "Path" ADD COLUMN IF NOT EXISTS "comment" TEXT NOT NULL DEFAULT \'\'',
+      );
+    })().catch((error) => {
+      ensureCompatPromise = null;
+      throw error;
+    });
+  }
+  await ensureCompatPromise;
+}
+
 export async function getOrCreateStudy() {
+  await ensureSchemaCompat();
   let study = await prisma.study.findFirst();
   if (!study) {
     study = await prisma.study.create({
