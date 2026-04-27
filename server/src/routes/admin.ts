@@ -62,6 +62,33 @@ adminRouter.post("/publish", async (_req, res) => {
   }
 });
 
+adminRouter.patch("/settings", async (req, res) => {
+  try {
+    const study = await getOrCreateStudy();
+    const draft = await ensureDraft(study.id);
+    const { settingsJson } = req.body as { settingsJson?: unknown };
+    if (typeof settingsJson !== "string") {
+      res.status(400).json({ error: "settingsJson deve ser string JSON" });
+      return;
+    }
+    // Validate JSON before persisting.
+    try {
+      JSON.parse(settingsJson);
+    } catch {
+      res.status(400).json({ error: "settingsJson inválido" });
+      return;
+    }
+    const updated = await prisma.studyVersion.update({
+      where: { id: draft.id },
+      data: { settingsJson },
+    });
+    res.json({ id: updated.id, settingsJson: updated.settingsJson });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao salvar configurações" });
+  }
+});
+
 adminRouter.get("/tasks", async (req, res) => {
   try {
     const study = await getOrCreateStudy();
@@ -465,7 +492,7 @@ adminRouter.post("/duplicate-version", async (req, res) => {
     }
     const draft = await prisma.$transaction(async (tx) => {
       const newDraft = await tx.studyVersion.create({
-        data: { studyId: study.id, isDraft: true, number: 0 },
+        data: { studyId: study.id, isDraft: true, number: 0, settingsJson: source.settingsJson ?? "{}" },
       });
       for (const t of source.tasks) {
         await tx.task.create({

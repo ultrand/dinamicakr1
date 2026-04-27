@@ -28,6 +28,61 @@ import type { Question, StudyVersion, Task } from "../types";
    Types
 ───────────────────────────────────────────── */
 type VersionPayload = { studyId: string; version: StudyVersion | null };
+type DynamicSettings = {
+  stepLabels: [string, string, string, string, string];
+  step1Title: string;
+  step1Sub: string;
+  step2Title: string;
+  step2Sub: string;
+  step3Title: string;
+  step3Sub: string;
+  step4Title: string;
+  step4Sub: string;
+  step5Title: string;
+  step5Sub: string;
+  minCriticalSelected: number;
+  minFilledFlows: number;
+};
+
+const DEFAULT_SETTINGS: DynamicSettings = {
+  stepLabels: ["Seleção", "Ranking", "Perguntas", "Fluxos", "Revisão"],
+  step1Title: "Selecione as tarefas críticas",
+  step1Sub: "Escolha todas as tarefas que considera difíceis de realizar no método.",
+  step2Title: "Ordene por prioridade",
+  step2Sub: "Arraste ou use ↑↓ para ordenar de forma geral, do mais crítico ao menos crítico.",
+  step3Title: "Perguntas sobre o método",
+  step3Sub: "Responda antes de montar os fluxos.",
+  step4Title: "Monte os fluxos de tarefas",
+  step4Sub: "Indique a sequência de passos que leva à tarefa crítica. Arraste do banco ou clique em + para adicionar.",
+  step5Title: "Revise e envie",
+  step5Sub: "Confirme antes de submeter.",
+  minCriticalSelected: 1,
+  minFilledFlows: 1,
+};
+
+function parseDynamicSettings(raw: string | undefined): DynamicSettings {
+  if (!raw) return DEFAULT_SETTINGS;
+  try {
+    const parsed = JSON.parse(raw) as Partial<DynamicSettings>;
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      stepLabels: Array.isArray(parsed.stepLabels) && parsed.stepLabels.length === 5
+        ? [
+            String(parsed.stepLabels[0] ?? DEFAULT_SETTINGS.stepLabels[0]),
+            String(parsed.stepLabels[1] ?? DEFAULT_SETTINGS.stepLabels[1]),
+            String(parsed.stepLabels[2] ?? DEFAULT_SETTINGS.stepLabels[2]),
+            String(parsed.stepLabels[3] ?? DEFAULT_SETTINGS.stepLabels[3]),
+            String(parsed.stepLabels[4] ?? DEFAULT_SETTINGS.stepLabels[4]),
+          ]
+        : DEFAULT_SETTINGS.stepLabels,
+      minCriticalSelected: Math.max(1, Number(parsed.minCriticalSelected ?? DEFAULT_SETTINGS.minCriticalSelected) || 1),
+      minFilledFlows: Math.max(1, Number(parsed.minFilledFlows ?? DEFAULT_SETTINGS.minFilledFlows) || 1),
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 function capitalizeText(s: string) {
   const t = (s ?? "").trim();
@@ -103,18 +158,11 @@ const initState: WizardState = {
 /* ─────────────────────────────────────────────
    Stepper header
 ───────────────────────────────────────────── */
-const STEPS = [
-  { n: 1, label: "Seleção" },
-  { n: 2, label: "Ranking" },
-  { n: 3, label: "Perguntas" },
-  { n: 4, label: "Fluxos" },
-  { n: 5, label: "Revisão" },
-] as const;
-
-function Stepper({ step, maxReached }: { step: number; maxReached: number }) {
+function Stepper({ step, maxReached, labels }: { step: number; maxReached: number; labels: DynamicSettings["stepLabels"] }) {
+  const steps = labels.map((label, i) => ({ n: (i + 1) as 1 | 2 | 3 | 4 | 5, label }));
   return (
     <div className="wz-stepper" role="list">
-      {STEPS.map(({ n, label }, i) => {
+      {steps.map(({ n, label }, i) => {
         const done = n < step;
         const active = n === step;
         const locked = n > maxReached;
@@ -140,8 +188,8 @@ function Stepper({ step, maxReached }: { step: number; maxReached: number }) {
    PASSO 1 — Seleção por etapa (accordion)
 ───────────────────────────────────────────── */
 function Step1({
-  tasks, selected, dispatch,
-}: { tasks: Task[]; selected: string[]; dispatch: React.Dispatch<Action> }) {
+  tasks, selected, dispatch, title, sub,
+}: { tasks: Task[]; selected: string[]; dispatch: React.Dispatch<Action>; title: string; sub: string }) {
   const grouped = useMemo(() => {
     const map = new Map<string, Task[]>();
     for (const t of tasks) {
@@ -168,8 +216,8 @@ function Step1({
     <div className="wz-body">
       <div className="wz-section-hd">
         <div>
-          <h2 className="wz-title">Selecione as tarefas críticas</h2>
-          <p className="wz-sub">Escolha todas as tarefas que considera difíceis de realizar no método.</p>
+          <h2 className="wz-title">{title}</h2>
+          <p className="wz-sub">{sub}</p>
         </div>
         <div className="wz-counter-pill">
           {selected.length} selecionada{selected.length !== 1 ? "s" : ""}
@@ -275,8 +323,8 @@ function SortableRankItem({
 }
 
 function Step2({
-  orderedSelected, taskById, dispatch,
-}: { orderedSelected: string[]; taskById: Map<string, Task>; dispatch: React.Dispatch<Action> }) {
+  orderedSelected, taskById, dispatch, title, sub,
+}: { orderedSelected: string[]; taskById: Map<string, Task>; dispatch: React.Dispatch<Action>; title: string; sub: string }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -300,8 +348,8 @@ function Step2({
     <div className="wz-body">
       <div className="wz-section-hd">
         <div>
-          <h2 className="wz-title">Ordene por prioridade</h2>
-          <p className="wz-sub">Arraste ou use ↑↓ para ordenar de forma geral, do mais crítico ao menos crítico.</p>
+          <h2 className="wz-title">{title}</h2>
+          <p className="wz-sub">{sub}</p>
         </div>
       </div>
 
@@ -330,7 +378,7 @@ function Step2({
    PASSO 3 — Perguntas conceituais
 ───────────────────────────────────────────── */
 function Step3({
-  qHardest, qText, hardestId, why, longText, selected, taskById, dispatch, invalidHardest, invalidText,
+  qHardest, qText, hardestId, why, longText, selected, taskById, dispatch, invalidHardest, invalidText, title, sub,
 }: {
   qHardest: Question | undefined;
   qText: Question | undefined;
@@ -342,11 +390,13 @@ function Step3({
   dispatch: React.Dispatch<Action>;
   invalidHardest: boolean;
   invalidText: boolean;
+  title: string;
+  sub: string;
 }) {
   return (
     <div className="wz-body">
-      <h2 className="wz-title">Perguntas sobre o método</h2>
-      <p className="wz-sub">Responda antes de montar os fluxos.</p>
+      <h2 className="wz-title">{title}</h2>
+      <p className="wz-sub">{sub}</p>
 
       {/* 3.1 — hardest_critical */}
       {qHardest && (
@@ -408,7 +458,7 @@ function Step3({
    PASSO 4 — Fluxos (progressivo, top 1-5)
 ───────────────────────────────────────────── */
 function Step4({
-  top5, taskById, chains, flowComments, visibleFlowCount, dispatch,
+  top5, taskById, chains, flowComments, visibleFlowCount, dispatch, title, sub, minFilledFlows,
 }: {
   top5: Task[];
   taskById: Map<string, Task>;
@@ -416,6 +466,9 @@ function Step4({
   flowComments: Record<string, string>;
   visibleFlowCount: number;
   dispatch: React.Dispatch<Action>;
+  title: string;
+  sub: string;
+  minFilledFlows: number;
 }) {
   const allTasks = Array.from(taskById.values());
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -505,12 +558,8 @@ function Step4({
     <div className="wz-body">
       <div className="wz-section-hd">
         <div>
-          <h2 className="wz-title">Monte os fluxos de tarefas</h2>
-          <p className="wz-sub">
-            Indique a sequência de passos que leva à tarefa crítica.
-            Arraste do banco ou clique em + para adicionar.
-            Ao menos 1 fluxo deve ser preenchido.
-          </p>
+          <h2 className="wz-title">{title}</h2>
+          <p className="wz-sub">{sub} Ao menos {minFilledFlows} fluxo(s) deve(m) ser preenchido(s).</p>
         </div>
         <div className="wz-counter-pill">{visibleFlowCount} de {Math.min(top5.length, 5)}</div>
       </div>
@@ -625,7 +674,7 @@ function Step4({
 ───────────────────────────────────────────── */
 function Step5({
   state, taskById, qHardest, qText, version,
-  submitting, err, onSubmit,
+  submitting, err, onSubmit, title, sub,
 }: {
   state: WizardState;
   taskById: Map<string, Task>;
@@ -635,6 +684,8 @@ function Step5({
   submitting: boolean;
   err: string | null;
   onSubmit: () => void;
+  title: string;
+  sub: string;
 }) {
   const { orderedSelected, hardestId, why, longText, chains, flowComments, visibleFlowCount } = state;
   const top5 = orderedSelected.slice(0, visibleFlowCount);
@@ -643,8 +694,8 @@ function Step5({
 
   return (
     <div className="wz-body">
-      <h2 className="wz-title">Revise e envie</h2>
-      <p className="wz-sub">Confirme antes de submeter. Versão: <strong>{version.number}</strong></p>
+      <h2 className="wz-title">{title}</h2>
+      <p className="wz-sub">{sub} Versão: <strong>{version.number}</strong></p>
 
       {/* resumo seleção */}
       <div className="wz-review-block">
@@ -774,6 +825,7 @@ export function ParticipantPage() {
   const qHardest = questions.find((q) => q.type === "hardest_critical");
   const qText    = questions.find((q) => q.type === "text_long");
   const qFlow    = questions.find((q) => q.type === "flow_builder_per_critical");
+  const dynamicSettings = useMemo(() => parseDynamicSettings(version?.settingsJson), [version?.settingsJson]);
 
   const top5Tasks = useMemo(
     () => state.orderedSelected.slice(0, 5).map((id) => taskById.get(id)).filter(Boolean) as Task[],
@@ -786,8 +838,8 @@ export function ParticipantPage() {
 
     if (target > state.step) {
       // validate current step
-      if (state.step === 1 && state.selected.length === 0) {
-        setStepErr("Selecione ao menos uma tarefa antes de avançar."); return;
+      if (state.step === 1 && state.selected.length < dynamicSettings.minCriticalSelected) {
+        setStepErr(`Selecione ao menos ${dynamicSettings.minCriticalSelected} tarefa(s) antes de avançar.`); return;
       }
       if (state.step === 3) {
         let invalidHardest = false;
@@ -803,8 +855,9 @@ export function ParticipantPage() {
       if (state.step === 4) {
         const visibleIds = state.orderedSelected.slice(0, state.visibleFlowCount);
         const hasOne = visibleIds.some((id) => (state.chains[id] ?? []).length > 0);
-        if (!hasOne) {
-          setStepErr("Preencha ao menos 1 fluxo antes de avançar.");
+        const filledCount = visibleIds.filter((id) => (state.chains[id] ?? []).length > 0).length;
+        if (filledCount < dynamicSettings.minFilledFlows) {
+          setStepErr(`Preencha ao menos ${dynamicSettings.minFilledFlows} fluxo(s) antes de avançar.`);
           return;
         }
       }
@@ -871,7 +924,7 @@ export function ParticipantPage() {
       {/* header */}
       <div className="wz-header">
         <h1 style={{ margin: 0, fontSize: "var(--fs-md)" }}>Dinâmica — Tarefas Críticas</h1>
-        <Stepper step={state.step} maxReached={maxReached} />
+        <Stepper step={state.step} maxReached={maxReached} labels={dynamicSettings.stepLabels} />
       </div>
 
       {/* body com animação de troca */}
@@ -884,10 +937,10 @@ export function ParticipantPage() {
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
           {state.step === 1 && (
-            <Step1 tasks={version.tasks} selected={state.selected} dispatch={dispatch} />
+            <Step1 tasks={version.tasks} selected={state.selected} dispatch={dispatch} title={dynamicSettings.step1Title} sub={dynamicSettings.step1Sub} />
           )}
           {state.step === 2 && (
-            <Step2 orderedSelected={state.orderedSelected} taskById={taskById} dispatch={dispatch} />
+            <Step2 orderedSelected={state.orderedSelected} taskById={taskById} dispatch={dispatch} title={dynamicSettings.step2Title} sub={dynamicSettings.step2Sub} />
           )}
           {state.step === 3 && (
             <Step3
@@ -896,6 +949,8 @@ export function ParticipantPage() {
               selected={state.selected} taskById={taskById} dispatch={dispatch}
               invalidHardest={invalidStep3.hardest}
               invalidText={invalidStep3.text}
+              title={dynamicSettings.step3Title}
+              sub={dynamicSettings.step3Sub}
             />
           )}
           {state.step === 4 && (
@@ -905,6 +960,9 @@ export function ParticipantPage() {
               flowComments={state.flowComments}
               visibleFlowCount={state.visibleFlowCount}
               dispatch={dispatch}
+              title={dynamicSettings.step4Title}
+              sub={dynamicSettings.step4Sub}
+              minFilledFlows={dynamicSettings.minFilledFlows}
             />
           )}
           {state.step === 5 && (
@@ -913,6 +971,8 @@ export function ParticipantPage() {
               qHardest={qHardest} qText={qText}
               version={version} submitting={submitting} err={submitErr}
               onSubmit={() => void submit()}
+              title={dynamicSettings.step5Title}
+              sub={dynamicSettings.step5Sub}
             />
           )}
         </motion.div>

@@ -23,6 +23,7 @@ model StudyVersion {
   isDraft     Boolean  @default(false)
   publishedAt DateTime?
   label       String   @default("")
+  settingsJson String  @default("{}")
   tasks       Task[]
   questions   Question[]
   responses   Response[]

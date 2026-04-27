@@ -11,6 +11,9 @@ async function ensureSchemaCompat() {
       await prisma.$executeRawUnsafe(
         'ALTER TABLE "Path" ADD COLUMN IF NOT EXISTS "comment" TEXT NOT NULL DEFAULT \'\'',
       );
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "StudyVersion" ADD COLUMN IF NOT EXISTS "settingsJson" TEXT NOT NULL DEFAULT \'{}\'',
+      );
     })().catch((error) => {
       ensureCompatPromise = null;
       throw error;
@@ -83,6 +86,7 @@ export async function publishDraft(studyId: string, metadata?: { label?: string 
         isDraft: false,
         publishedAt: new Date(),
         label: (metadata?.label ?? "").trim(),
+        settingsJson: draft.settingsJson ?? "{}",
       },
     });
 

@@ -4,6 +4,18 @@ import { getLatestPublishedVersion, getOrCreateStudy } from "../services/studySe
 
 export const publicRouter = Router();
 
+function parseSettingsMin(raw: string | undefined) {
+  try {
+    const parsed = raw ? JSON.parse(raw) as { minCriticalSelected?: number; minFilledFlows?: number } : {};
+    return {
+      minCriticalSelected: Math.max(1, Number(parsed.minCriticalSelected ?? 1) || 1),
+      minFilledFlows: Math.max(1, Number(parsed.minFilledFlows ?? 1) || 1),
+    };
+  } catch {
+    return { minCriticalSelected: 1, minFilledFlows: 1 };
+  }
+}
+
 publicRouter.get("/version", async (_req, res) => {
   try {
     const study = await getOrCreateStudy();
@@ -69,6 +81,7 @@ publicRouter.post("/responses", async (req, res) => {
       where: { studyVersionId },
       orderBy: { sortOrder: "asc" },
     });
+    const minima = parseSettingsMin(version.settingsJson);
     const qMap = new Map(questions.map((q) => [q.id, q]));
 
     const taskIds = new Set(
@@ -83,8 +96,8 @@ publicRouter.post("/responses", async (req, res) => {
         return;
       }
       if (q.type === "critical_select") {
-        if (!a.criticalTaskIds?.length) {
-          res.status(400).json({ error: "Selecione ao menos uma tarefa crítica" });
+        if ((a.criticalTaskIds?.length ?? 0) < minima.minCriticalSelected) {
+          res.status(400).json({ error: `Selecione ao menos ${minima.minCriticalSelected} tarefa(s) crítica(s)` });
           return;
         }
       }
@@ -108,9 +121,9 @@ publicRouter.post("/responses", async (req, res) => {
       }
       if (q.type === "flow_builder_per_critical") {
         // fluxo: exige ao menos 1 preenchido entre os top-5
-        const hasAny = (a.flows ?? []).some((f) => f.stepTaskIds.length > 0);
-        if (!hasAny) {
-          res.status(400).json({ error: "Preencha o fluxo de ao menos uma tarefa crítica" });
+        const filledCount = (a.flows ?? []).filter((f) => f.stepTaskIds.length > 0).length;
+        if (filledCount < minima.minFilledFlows) {
+          res.status(400).json({ error: `Preencha ao menos ${minima.minFilledFlows} fluxo(s)` });
           return;
         }
       }

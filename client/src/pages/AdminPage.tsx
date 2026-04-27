@@ -40,9 +40,65 @@ const WIZARD_STEPS = [
 
 type Overview = {
   study: { id: string; name: string };
-  draft: { id: string; tasks: Task[]; questions: Question[] };
+  draft: { id: string; tasks: Task[]; questions: Question[]; settingsJson?: string };
   publishedVersions: { id: string; number: number; publishedAt: string | null; label: string; _count: { responses: number } }[];
 };
+
+type DynamicSettings = {
+  stepLabels: [string, string, string, string, string];
+  step1Title: string;
+  step1Sub: string;
+  step2Title: string;
+  step2Sub: string;
+  step3Title: string;
+  step3Sub: string;
+  step4Title: string;
+  step4Sub: string;
+  step5Title: string;
+  step5Sub: string;
+  minCriticalSelected: number;
+  minFilledFlows: number;
+};
+
+const DEFAULT_SETTINGS: DynamicSettings = {
+  stepLabels: ["Seleção", "Ranking", "Perguntas", "Fluxos", "Revisão"],
+  step1Title: "Selecione as tarefas críticas",
+  step1Sub: "Escolha todas as tarefas que considera difíceis de realizar no método.",
+  step2Title: "Ordene por prioridade",
+  step2Sub: "Arraste ou use ↑↓ para ordenar de forma geral, do mais crítico ao menos crítico.",
+  step3Title: "Perguntas sobre o método",
+  step3Sub: "Responda antes de montar os fluxos.",
+  step4Title: "Monte os fluxos de tarefas",
+  step4Sub: "Indique a sequência de passos que leva à tarefa crítica. Arraste do banco ou clique em + para adicionar.",
+  step5Title: "Revise e envie",
+  step5Sub: "Confirme antes de submeter.",
+  minCriticalSelected: 1,
+  minFilledFlows: 1,
+};
+
+function parseSettings(raw: string | undefined): DynamicSettings {
+  if (!raw) return DEFAULT_SETTINGS;
+  try {
+    const parsed = JSON.parse(raw) as Partial<DynamicSettings>;
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      stepLabels: Array.isArray(parsed.stepLabels) && parsed.stepLabels.length === 5
+        ? [
+            String(parsed.stepLabels[0] ?? DEFAULT_SETTINGS.stepLabels[0]),
+            String(parsed.stepLabels[1] ?? DEFAULT_SETTINGS.stepLabels[1]),
+            String(parsed.stepLabels[2] ?? DEFAULT_SETTINGS.stepLabels[2]),
+            String(parsed.stepLabels[3] ?? DEFAULT_SETTINGS.stepLabels[3]),
+            String(parsed.stepLabels[4] ?? DEFAULT_SETTINGS.stepLabels[4]),
+          ]
+        : DEFAULT_SETTINGS.stepLabels,
+      minCriticalSelected: Math.max(1, Number(parsed.minCriticalSelected ?? 1) || 1),
+      minFilledFlows: Math.max(1, Number(parsed.minFilledFlows ?? 1) || 1),
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 /* ── Sortable question card ──────────────────────────────── */
 function SortableQ({ q, onSave }: { q: Question; onSave: (id: string, patch: Partial<Question>) => void }) {
@@ -148,6 +204,7 @@ export function AdminPage() {
   const [bulk,       setBulk]       = useState("");
   const [bulkOpen,   setBulkOpen]   = useState(false);
   const [dupLoading, setDupLoading] = useState<string | null>(null);
+  const [settings, setSettings] = useState<DynamicSettings>(DEFAULT_SETTINGS);
 
   const authed = token.length > 0;
 
@@ -159,6 +216,9 @@ export function AdminPage() {
   }, [token]);
 
   useEffect(() => { if (token) localStorage.setItem(LS, token); void load(); }, [token, load]);
+  useEffect(() => {
+    setSettings(parseSettings(overview?.draft.settingsJson));
+  }, [overview?.draft.settingsJson]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const questions = overview?.draft.questions ?? [];
@@ -230,6 +290,16 @@ export function AdminPage() {
       flash("Rascunho criado."); await load();
     } catch (e) { setErr(e instanceof Error ? e.message : "Erro"); }
     finally { setDupLoading(null); }
+  };
+
+  const saveSettings = async () => {
+    try {
+      await apiSend("/api/admin/settings", "PATCH", { settingsJson: JSON.stringify(settings) }, token);
+      flash("Textos e mínimos salvos no rascunho.");
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Erro");
+    }
   };
 
   const exportUrl = (vId: string, fmt: "csv" | "json") =>
@@ -305,6 +375,60 @@ export function AdminPage() {
       {/* ── TAB: Perguntas / Passos (wizard mirror) ── */}
       {tab === "wizard" && (
         <div className="stack-s">
+          <div className="panel">
+            <div className="panel-hd">Textos da dinâmica + mínimos por passo</div>
+            <div className="panel-body stack-s">
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <div className="field" style={{ flex: "1 1 140px" }}>
+                  <label>Rótulo passo 1</label>
+                  <input value={settings.stepLabels[0]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [e.target.value, s.stepLabels[1], s.stepLabels[2], s.stepLabels[3], s.stepLabels[4]] }))} />
+                </div>
+                <div className="field" style={{ flex: "1 1 140px" }}>
+                  <label>Rótulo passo 2</label>
+                  <input value={settings.stepLabels[1]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [s.stepLabels[0], e.target.value, s.stepLabels[2], s.stepLabels[3], s.stepLabels[4]] }))} />
+                </div>
+                <div className="field" style={{ flex: "1 1 140px" }}>
+                  <label>Rótulo passo 3</label>
+                  <input value={settings.stepLabels[2]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [s.stepLabels[0], s.stepLabels[1], e.target.value, s.stepLabels[3], s.stepLabels[4]] }))} />
+                </div>
+                <div className="field" style={{ flex: "1 1 140px" }}>
+                  <label>Rótulo passo 4</label>
+                  <input value={settings.stepLabels[3]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [s.stepLabels[0], s.stepLabels[1], s.stepLabels[2], e.target.value, s.stepLabels[4]] }))} />
+                </div>
+                <div className="field" style={{ flex: "1 1 140px" }}>
+                  <label>Rótulo passo 5</label>
+                  <input value={settings.stepLabels[4]} onChange={(e) => setSettings((s) => ({ ...s, stepLabels: [s.stepLabels[0], s.stepLabels[1], s.stepLabels[2], s.stepLabels[3], e.target.value] }))} />
+                </div>
+              </div>
+              {([1, 2, 3, 4, 5] as const).map((n) => (
+                <div key={n} className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  <div className="field" style={{ flex: "1 1 300px" }}>
+                    <label>Título passo {n}</label>
+                    <input value={settings[`step${n}Title` as keyof DynamicSettings] as string} onChange={(e) => setSettings((s) => ({ ...s, [`step${n}Title`]: e.target.value } as DynamicSettings))} />
+                  </div>
+                  <div className="field" style={{ flex: "2 1 420px" }}>
+                    <label>Subtítulo passo {n}</label>
+                    <input value={settings[`step${n}Sub` as keyof DynamicSettings] as string} onChange={(e) => setSettings((s) => ({ ...s, [`step${n}Sub`]: e.target.value } as DynamicSettings))} />
+                  </div>
+                </div>
+              ))}
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <div className="field" style={{ flex: "1 1 220px" }}>
+                  <label>Mínimo selecionadas no passo 1</label>
+                  <input type="number" min={1} value={settings.minCriticalSelected} onChange={(e) => setSettings((s) => ({ ...s, minCriticalSelected: Math.max(1, Number(e.target.value) || 1) }))} />
+                </div>
+                <div className="field" style={{ flex: "1 1 220px" }}>
+                  <label>Mínimo fluxos preenchidos no passo 4</label>
+                  <input type="number" min={1} value={settings.minFilledFlows} onChange={(e) => setSettings((s) => ({ ...s, minFilledFlows: Math.max(1, Number(e.target.value) || 1) }))} />
+                </div>
+              </div>
+              <div className="row-s">
+                <button type="button" className="btn primary" onClick={() => void saveSettings()}>Salvar textos e mínimos</button>
+                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>Isso salva no rascunho. Para o participante ver, publique.</span>
+              </div>
+            </div>
+          </div>
+
           <NewQuestionForm token={token} onCreated={() => void load()} />
 
           {qByStep.map((ws) => (
