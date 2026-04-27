@@ -37,7 +37,7 @@ export async function ensureDraft(studyId: string) {
 }
 
 /** Copia rascunho para nova versão publicada (imutável). Rascunho permanece editável. */
-export async function publishDraft(studyId: string) {
+export async function publishDraft(studyId: string, metadata?: { label?: string }) {
   const draft = await getDraftVersion(studyId);
   if (!draft) throw new Error("Rascunho não encontrado");
 
@@ -62,6 +62,7 @@ export async function publishDraft(studyId: string) {
         number: newNumber,
         isDraft: false,
         publishedAt: new Date(),
+        label: (metadata?.label ?? "").trim(),
       },
     });
 

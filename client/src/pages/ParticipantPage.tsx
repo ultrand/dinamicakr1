@@ -424,6 +424,17 @@ function Step4({
   const [activeCritId, setActiveCritId] = useState<string>("");
   const [flashCritId, setFlashCritId] = useState<string>("");
 
+  useEffect(() => {
+    const removeLegacyQuickAdd = () => {
+      const nodes = document.querySelectorAll(".wz-quick-add");
+      nodes.forEach((node) => node.remove());
+    };
+    removeLegacyQuickAdd();
+    const observer = new MutationObserver(() => removeLegacyQuickAdd());
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   const visibleTop5 = top5.slice(0, visibleFlowCount);
   useEffect(() => {
     if (!visibleTop5.length) return;
@@ -564,24 +575,6 @@ function Step4({
                     chain={chain}
                     onChange={(c) => dispatch({ type: "SET_CHAIN", critId: crit.id, chain: c })}
                   />
-
-                  {/* atalhos de clique rápido */}
-                  <div className="wz-quick-add">
-                    <span className="label-sm" style={{ color: "var(--ink-3)" }}>Adicionar rápido:</span>
-                    {allTasks.slice(0, 6).map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className="wz-quick-chip"
-                        onClick={() => addToFlow(crit.id, t.id)}
-                      >
-                        + {(t.verb ?? "").toUpperCase()} {t.textoPrincipal}
-                      </button>
-                    ))}
-                    {allTasks.length > 6 && (
-                      <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>…mais no banco →</span>
-                    )}
-                  </div>
 
                   {/* campo comentário */}
                   <div className="wz-flow-comment">

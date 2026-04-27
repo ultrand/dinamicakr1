@@ -28,6 +28,8 @@ export type StudyVersion = {
   id: string;
   number: number;
   isDraft: boolean;
+  label?: string;
+  note?: string;
   tasks: Task[];
   questions: Question[];
 };

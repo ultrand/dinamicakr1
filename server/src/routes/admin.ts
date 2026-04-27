@@ -15,7 +15,7 @@ adminRouter.get("/overview", async (_req, res) => {
     const published = await prisma.studyVersion.findMany({
       where: { studyId: study.id, isDraft: false },
       orderBy: { number: "desc" },
-      select: { id: true, number: true, publishedAt: true, _count: { select: { responses: true } } },
+      select: { id: true, number: true, publishedAt: true, label: true, _count: { select: { responses: true } } },
     });
     const draftFull = await prisma.studyVersion.findUnique({
       where: { id: draft.id },
@@ -45,12 +45,15 @@ adminRouter.post("/publish", async (_req, res) => {
       res.status(400).json({ error: "Rascunho precisa de cards e perguntas" });
       return;
     }
-    const result = await publishDraft(study.id);
+    const body = _req.body as { label?: unknown };
+    const label = typeof body.label === "string" ? body.label : "";
+    const result = await publishDraft(study.id, { label });
     res.json({
       published: {
         id: result.published.id,
         number: result.published.number,
         publishedAt: result.published.publishedAt,
+        label: result.published.label,
       },
     });
   } catch (e) {
@@ -507,6 +510,7 @@ adminRouter.get("/versions", async (_req, res) => {
         id: true,
         number: true,
         publishedAt: true,
+        label: true,
         _count: { select: { responses: true } },
       },
     });

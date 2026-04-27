@@ -1424,36 +1424,6 @@ td input:focus, td select:focus {
 .wz-flow-crit-name { font-size: var(--fs-sm); font-weight: 700; color: var(--ink); flex: 1; }
 .wz-flow-etapa { font-size: var(--fs-xs); color: var(--ink-3); }
 
-/* atalhos de clique rápido */
-.wz-quick-add {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  margin-top: var(--ciap-space-2);
-  padding-top: var(--ciap-space-2);
-  border-top: 1px dashed var(--border-l);
-}
-.wz-quick-chip {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 7px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--ink-2);
-  cursor: pointer;
-  transition: all var(--ciap-transition-base);
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wz-quick-chip:hover { border-color: var(--accent); background: rgba(124,58,237,0.07); color: var(--accent); }
-
 /* campo comentário por fluxo */
 .wz-flow-comment {
   margin-top: var(--ciap-space-2);
@@ -1471,6 +1441,11 @@ td input:focus, td select:focus {
   background: var(--surface-2);
   color: var(--ink);
   line-height: 1.5;
+}
+
+/* legado: remove bloco de atalho textual de fluxo */
+.wz-quick-add {
+  display: none !important;
 }
 
 /* botão adicionar próximo fluxo */

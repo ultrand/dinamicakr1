@@ -22,6 +22,7 @@ model StudyVersion {
   number      Int
   isDraft     Boolean  @default(false)
   publishedAt DateTime?
+  label       String   @default("")
   tasks       Task[]
   questions   Question[]
   responses   Response[]
@@ -127,6 +128,7 @@ model Path {
   responseId       String
   response         Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
   criticalTaskId   String
+  comment          String   @default("")
   steps            PathStep[]
 
   @@index([responseId])
