@@ -510,10 +510,8 @@ function Step4({
           .includes(bankSearch.toLowerCase()),
       )
     : allTasks;
-  const activeChainTaskOrder = new Map<string, number>();
-  (chains[activeCritId] ?? []).forEach((entry, idx) => {
-    activeChainTaskOrder.set(entry.taskId, idx + 1);
-  });
+  const activeFlowNumber = Math.max(1, visibleTop5.findIndex((t) => t.id === activeCritId) + 1);
+  const activeChainTaskIds = new Set((chains[activeCritId] ?? []).map((entry) => entry.taskId));
 
   const onDragStart = (e: DragStartEvent) => {
     const d = e.active.data.current as { type?: string; taskId?: string } | undefined;
@@ -596,8 +594,8 @@ function Step4({
                   <BankDraggable
                     key={t.id}
                     task={t}
-                    dimmed={activeChainTaskOrder.has(t.id)}
-                    usedOrder={activeChainTaskOrder.get(t.id)}
+                    dimmed={activeChainTaskIds.has(t.id)}
+                    activeFlowNumber={activeFlowNumber}
                     onClick={() => activeCritId && addToFlow(activeCritId, t.id)}
                   />
                 ))}
