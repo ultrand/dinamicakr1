@@ -42,7 +42,7 @@ export function BankDraggable({
       style={style}
       {...listeners}
       {...attributes}
-      className={`bank-card-compact tc-compact-wrap${dimmed ? " is-dimmed" : ""}`}
+      className={`bank-card-compact tc-compact-wrap${dimmed ? " is-dimmed" : ""}${!dimmed && (otherFlowNumbers?.length ?? 0) > 0 ? " has-flow-xrefs" : ""}`}
       onClick={() => {
         if (!dimmed) onClick?.(task);
       }}
