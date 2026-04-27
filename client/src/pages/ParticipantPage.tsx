@@ -510,6 +510,7 @@ function Step4({
           .includes(bankSearch.toLowerCase()),
       )
     : allTasks;
+  const activeChainTaskIds = new Set((chains[activeCritId] ?? []).map((entry) => entry.taskId));
 
   const onDragStart = (e: DragStartEvent) => {
     const d = e.active.data.current as { type?: string; taskId?: string } | undefined;
@@ -589,7 +590,12 @@ function Step4({
               />
               <div className="bank wz-bank-2col">
                 {filteredBank.map((t) => (
-                  <BankDraggable key={t.id} task={t} onClick={() => activeCritId && addToFlow(activeCritId, t.id)} />
+                  <BankDraggable
+                    key={t.id}
+                    task={t}
+                    dimmed={activeChainTaskIds.has(t.id)}
+                    onClick={() => activeCritId && addToFlow(activeCritId, t.id)}
+                  />
                 ))}
                 {filteredBank.length === 0 && (
                   <p className="muted" style={{ fontSize: "var(--fs-xs)", gridColumn: "1/-1" }}>Nenhum card.</p>
@@ -615,7 +621,6 @@ function Step4({
                     <span className="wz-flow-rank-badge">#{i + 1}</span>
                     <span className="wz-flow-crit-name">{formatTaskLabel(crit)}</span>
                     {crit.etapa && <span className="wz-flow-etapa">{crit.etapa}</span>}
-                    {activeCritId === crit.id && <span className="badge badge-y">Destino de clique</span>}
                   </div>
 
                   <FlowTrack

@@ -1281,6 +1281,13 @@ td input:focus, td select:focus {
 .bank-card-compact:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,.08); }
 .bank-card-compact:active { cursor: grabbing; }
 .bank-card-compact.drag-overlay { box-shadow: 0 4px 16px rgba(0,0,0,.14); }
+.bank-card-compact.is-dimmed {
+  opacity: 0.42;
+  filter: grayscale(0.25);
+}
+.bank-card-compact.is-dimmed:hover {
+  opacity: 0.62;
+}
 .tc-compact-wrap .tc { min-height: 92px; }
 .tc-compact-wrap .tc-top { padding: 6px 7px; }
 .tc-compact-wrap .tc-title { font-size: 11px; line-height: 1.25; }

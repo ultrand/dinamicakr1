@@ -13,7 +13,15 @@ import type { Task } from "../types";
 export type ChainEntry = { id: string; taskId: string };
 
 /* ── Bank card compact (draggable from the library) ─────── */
-export function BankDraggable({ task, onClick }: { task: Task; onClick?: (task: Task) => void }) {
+export function BankDraggable({
+  task,
+  onClick,
+  dimmed,
+}: {
+  task: Task;
+  onClick?: (task: Task) => void;
+  dimmed?: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `bank-${task.id}`,
     data: { type: "bank" as const, taskId: task.id },
@@ -29,7 +37,7 @@ export function BankDraggable({ task, onClick }: { task: Task; onClick?: (task: 
       style={style}
       {...listeners}
       {...attributes}
-      className="bank-card-compact tc-compact-wrap"
+      className={`bank-card-compact tc-compact-wrap${dimmed ? " is-dimmed" : ""}`}
       onClick={() => onClick?.(task)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
