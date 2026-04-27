@@ -510,7 +510,10 @@ function Step4({
           .includes(bankSearch.toLowerCase()),
       )
     : allTasks;
-  const activeChainTaskIds = new Set((chains[activeCritId] ?? []).map((entry) => entry.taskId));
+  const activeChainTaskOrder = new Map<string, number>();
+  (chains[activeCritId] ?? []).forEach((entry, idx) => {
+    activeChainTaskOrder.set(entry.taskId, idx + 1);
+  });
 
   const onDragStart = (e: DragStartEvent) => {
     const d = e.active.data.current as { type?: string; taskId?: string } | undefined;
@@ -593,7 +596,8 @@ function Step4({
                   <BankDraggable
                     key={t.id}
                     task={t}
-                    dimmed={activeChainTaskIds.has(t.id)}
+                    dimmed={activeChainTaskOrder.has(t.id)}
+                    usedOrder={activeChainTaskOrder.get(t.id)}
                     onClick={() => activeCritId && addToFlow(activeCritId, t.id)}
                   />
                 ))}
@@ -669,7 +673,11 @@ function Step4({
                 <button
                   type="button"
                   className="btn wz-add-next-flow"
-                  onClick={() => dispatch({ type: "ADD_NEXT_FLOW" })}
+                  onClick={() => {
+                    const nextCrit = top5[visibleFlowCount];
+                    dispatch({ type: "ADD_NEXT_FLOW" });
+                    if (nextCrit?.id) setActiveCritId(nextCrit.id);
+                  }}
                 >
                   + Montar próximo fluxo (#{visibleFlowCount + 1} — opcional)
                 </button>

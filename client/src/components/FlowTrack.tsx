@@ -17,10 +17,12 @@ export function BankDraggable({
   task,
   onClick,
   dimmed,
+  usedOrder,
 }: {
   task: Task;
   onClick?: (task: Task) => void;
   dimmed?: boolean;
+  usedOrder?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `bank-${task.id}`,
@@ -56,6 +58,9 @@ export function BankDraggable({
         ? `${task.verb} ${task.textoPrincipal} já está no fluxo ativo`
         : `Adicionar ${task.verb} ${task.textoPrincipal} ao fluxo ativo`}
     >
+      {dimmed && typeof usedOrder === "number" && (
+        <span className="bank-card-used-tag">JA NO FLUXO #{usedOrder}</span>
+      )}
       <TaskCard task={task} />
     </div>
   );

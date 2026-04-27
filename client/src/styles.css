@@ -1297,8 +1297,7 @@ td input:focus, td select:focus {
 .bank-card-compact.is-dimmed .tc {
   border-color: var(--border-l);
 }
-.bank-card-compact.is-dimmed::after {
-  content: "JA NO FLUXO";
+.bank-card-used-tag {
   position: absolute;
   right: 6px;
   top: 6px;
