@@ -31,6 +31,24 @@ type Analytics = {
 };
 type Ver = { id: string; number: number; publishedAt: string | null; _count: { responses: number } };
 
+function csvCell(value: unknown) {
+  const raw = value == null ? "" : String(value);
+  const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function downloadTextFile(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function AnalyticsPage() {
   const token = localStorage.getItem(LS) ?? "";
   const [versions,     setVersions]     = useState<Ver[]>([]);
@@ -42,6 +60,54 @@ export function AnalyticsPage() {
   const [loadingVersions, setLoadingVersions] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [section,      setSection]      = useState<"ranking" | "fluxos" | "grafo">("ranking");
+
+  const exportAnalyticsCsv = () => {
+    if (!data || !versionId) return;
+    const version = versions.find((v) => v.id === versionId);
+    const lines: string[] = [];
+    const now = new Date().toISOString();
+    lines.push(["meta", "generated_at", now].map(csvCell).join(","));
+    lines.push(["meta", "version_id", versionId].map(csvCell).join(","));
+    lines.push(["meta", "version_number", version ? `v${version.number}` : "desconhecida"].map(csvCell).join(","));
+    lines.push(["meta", "critical_filter", critFilter || "todas"].map(csvCell).join(","));
+
+    const pushRank = (metric: string, rows: { label: string; count: number }[]) => {
+      rows.forEach((r, i) => lines.push(["ranking", metric, i + 1, r.label, r.count].map(csvCell).join(",")));
+    };
+    const pushAvg = (metric: string, rows: RankPos[]) => {
+      rows.forEach((r, i) => lines.push(["ranking", metric, i + 1, r.label, r.avgPosition.toFixed(2), r.count].map(csvCell).join(",")));
+    };
+    const pushDisagree = (metric: string, rows: Disagree[]) => {
+      rows.forEach((r, i) => lines.push(["ranking", metric, i + 1, r.label, r.disagreement.toFixed(2), r.count].map(csvCell).join(",")));
+    };
+    const pushKeywords = (metric: string, rows: Keyword[]) => {
+      rows.forEach((r, i) => lines.push(["keywords", metric, i + 1, r.term, r.count].map(csvCell).join(",")));
+    };
+
+    lines.push(["section", "kind", "metric", "pos", "label_or_term", "value1", "value2"].map(csvCell).join(","));
+    pushRank("critical_selected", data.criticalRanking);
+    pushRank("top5_ranking", data.top5Ranking);
+    pushRank("bottleneck", data.bottleneckRanking);
+    pushRank("step1", data.step1Ranking);
+    pushRank("hardest", data.hardestCounts);
+    pushAvg("avg_rank_position", data.avgRankPosition);
+    pushDisagree("rank_disagreement", data.disagreementIndex);
+    pushKeywords("hardest_why", data.whyKeywordsTop);
+    pushKeywords("long_text", data.longTextKeywordsTop);
+
+    data.flowCoverageTop5.forEach((r) =>
+      lines.push(["flow_coverage", "coverage", "top5", r.label, r.filledCount, r.skippedCount, r.emptyCount, r.filledPercent].map(csvCell).join(",")),
+    );
+    data.commonPathByCritical.forEach((r) =>
+      lines.push(["common_path", "path", "dominant", r.criticalLabel, r.sequenceLabel.join(" -> "), r.frequency, r.percent].map(csvCell).join(",")),
+    );
+    data.graph.edges.forEach((e) =>
+      lines.push(["graph", "edge", "transition", `${e.fromLabel} -> ${e.toLabel}`, e.weight, e.from, e.to].map(csvCell).join(",")),
+    );
+
+    const filename = `analytics-v${version?.number ?? "x"}-${new Date().toISOString().slice(0, 10)}.csv`;
+    downloadTextFile(lines.join("\n"), filename);
+  };
 
   const loadVers = useCallback(async () => {
     if (!token) return;
@@ -97,6 +163,9 @@ export function AnalyticsPage() {
       <div className="row spread" style={{ marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>Análise agregada</h1>
         <div className="row-s">
+          <button type="button" className="btn ghost" onClick={exportAnalyticsCsv} disabled={!data || !versionId}>
+            Exportar análise (CSV)
+          </button>
           <Link to="/admin/export" className="btn ghost">Exportar</Link>
           <Link to="/admin" className="btn ghost">← Admin</Link>
         </div>
