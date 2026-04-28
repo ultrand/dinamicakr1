@@ -431,6 +431,7 @@ adminRouter.get("/export/csv", async (req, res) => {
       [
         "response_id",
         "created_at",
+        "participant_name",
         "selected_task_ids",
         "ranked_task_ids",
         "hardest_task_id",
@@ -455,6 +456,7 @@ adminRouter.get("/export/csv", async (req, res) => {
         lines.push([
           r.id,
           r.createdAt.toISOString(),
+          r.participantName,
           selected,
           ranked,
           r.criticalDifficulty?.taskId ?? "",
@@ -470,6 +472,7 @@ adminRouter.get("/export/csv", async (req, res) => {
           lines.push([
             r.id,
             r.createdAt.toISOString(),
+            r.participantName,
             selected,
             ranked,
             r.criticalDifficulty?.taskId ?? "",
@@ -514,6 +517,7 @@ adminRouter.get("/export/json", async (req, res) => {
     const out = responses.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
+      participantName: r.participantName,
       selectedCriticalTaskIds: r.criticalSelections.map((s) => s.taskId),
       orderedCriticalTaskIds: r.criticalRanks.map((x) => ({ taskId: x.taskId, position: x.position })),
       hardestTaskId: r.criticalDifficulty?.taskId ?? null,

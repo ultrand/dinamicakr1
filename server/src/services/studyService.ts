@@ -14,6 +14,9 @@ async function ensureSchemaCompat() {
       await prisma.$executeRawUnsafe(
         'ALTER TABLE "StudyVersion" ADD COLUMN IF NOT EXISTS "settingsJson" TEXT NOT NULL DEFAULT \'{}\'',
       );
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "Response" ADD COLUMN IF NOT EXISTS "participantName" TEXT NOT NULL DEFAULT \'\'',
+      );
     })().catch((error) => {
       ensureCompatPromise = null;
       throw error;

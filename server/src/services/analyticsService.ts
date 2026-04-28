@@ -26,6 +26,12 @@ function topTerms(texts: string[], n = 15): { term: string; count: number }[] {
 }
 
 export async function buildAnalytics(studyVersionId: string, filterCriticalTaskId?: string | null) {
+  const responseRows = await prisma.response.findMany({
+    where: { studyVersionId },
+    select: { id: true, createdAt: true, participantName: true },
+    orderBy: { createdAt: "asc" },
+  });
+
   const tasks = await prisma.task.findMany({
     where: { studyVersionId },
     select: { id: true, verb: true, textoPrincipal: true, etapa: true, atividade: true },
@@ -202,5 +208,10 @@ export async function buildAnalytics(studyVersionId: string, filterCriticalTaskI
     flowCoverageTop5,
     whyKeywordsTop,
     longTextKeywordsTop,
+    responses: responseRows.map((r) => ({
+      id: r.id,
+      createdAt: r.createdAt,
+      participantName: (r.participantName ?? "").trim(),
+    })),
   };
 }

@@ -14,6 +14,7 @@ type FlowCov = { criticalTaskId: string; label: string; filledCount: number; ski
 type Common = { criticalTaskId: string; criticalLabel: string; sequenceLabel: string[]; frequency: number; percent: number };
 type Edge   = { from: string; to: string; fromLabel: string; toLabel: string; weight: number };
 type Keyword = { term: string; count: number };
+type ResponseIdentity = { id: string; createdAt: string; participantName: string };
 type Analytics = {
   criticalRanking: Rank[];
   bottleneckRanking: Rank[];
@@ -28,6 +29,7 @@ type Analytics = {
   flowCoverageTop5: FlowCov[];
   whyKeywordsTop: Keyword[];
   longTextKeywordsTop: Keyword[];
+  responses: ResponseIdentity[];
 };
 type Ver = { id: string; number: number; publishedAt: string | null; _count: { responses: number } };
 
@@ -70,6 +72,7 @@ export function AnalyticsPage() {
     lines.push(["meta", "version_id", versionId].map(csvCell).join(","));
     lines.push(["meta", "version_number", version ? `v${version.number}` : "desconhecida"].map(csvCell).join(","));
     lines.push(["meta", "critical_filter", critFilter || "todas"].map(csvCell).join(","));
+    lines.push(["meta", "responses_count", data.responses.length].map(csvCell).join(","));
 
     const pushRank = (metric: string, rows: { label: string; count: number }[]) => {
       rows.forEach((r, i) => lines.push(["ranking", metric, i + 1, r.label, r.count].map(csvCell).join(",")));
@@ -85,6 +88,9 @@ export function AnalyticsPage() {
     };
 
     lines.push(["section", "kind", "metric", "pos", "label_or_term", "value1", "value2"].map(csvCell).join(","));
+    data.responses.forEach((r, i) =>
+      lines.push(["responses", "identity", "submitted", i + 1, r.id, r.createdAt, r.participantName || ""].map(csvCell).join(",")),
+    );
     pushRank("critical_selected", data.criticalRanking);
     pushRank("top5_ranking", data.top5Ranking);
     pushRank("bottleneck", data.bottleneckRanking);
@@ -219,6 +225,39 @@ export function AnalyticsPage() {
         <>
           {section === "ranking" && (
             <div className="stack-s">
+              <div className="panel">
+                <div className="panel-hd">Respostas recebidas (horário e identificação)</div>
+                <div className="panel-body">
+                  {!data.responses.length ? (
+                    <p className="muted">Sem respostas nesta versão.</p>
+                  ) : (
+                    <div className="table-wrap" style={{ border: "none", borderRadius: 0 }}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Horário</th>
+                            <th>Nome (opcional)</th>
+                            <th>ID da resposta</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.responses.map((r, i) => (
+                            <tr key={r.id}>
+                              <td>{i + 1}</td>
+                              <td>{new Date(r.createdAt).toLocaleString("pt-BR")}</td>
+                              <td>{r.participantName || "—"}</td>
+                              <td style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: "var(--fs-xs)" }}>
+                                {r.id}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
               {/* linha 1 */}
               <div className="analytics-grid">
                 <div className="panel">

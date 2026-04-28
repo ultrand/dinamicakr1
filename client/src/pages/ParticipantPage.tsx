@@ -714,7 +714,7 @@ function Step4({
 ───────────────────────────────────────────── */
 function Step5({
   state, taskById, qHardest, qText, version,
-  submitting, err, onSubmit, title, sub,
+  submitting, err, onSubmit, title, sub, participantName, onParticipantNameChange,
 }: {
   state: WizardState;
   taskById: Map<string, Task>;
@@ -726,6 +726,8 @@ function Step5({
   onSubmit: () => void;
   title: string;
   sub: string;
+  participantName: string;
+  onParticipantNameChange: (name: string) => void;
 }) {
   const { orderedSelected, hardestId, why, longText, chains, flowComments, visibleFlowCount } = state;
   const top5 = orderedSelected.slice(0, visibleFlowCount);
@@ -814,6 +816,23 @@ function Step5({
         </div>
       )}
 
+      <div className="wz-review-block">
+        <div className="wz-review-hd">Identificação opcional</div>
+        <label>
+          Nome (opcional)
+          <input
+            type="text"
+            placeholder="Ex.: Maria S."
+            value={participantName}
+            onChange={(e) => onParticipantNameChange(e.target.value)}
+            maxLength={120}
+          />
+        </label>
+        <p className="muted" style={{ fontSize: "var(--fs-xs)", marginBottom: 0 }}>
+          Se preencher, o nome aparecerá na análise junto do horário da resposta.
+        </p>
+      </div>
+
       {err && <p className="error" style={{ marginTop: 8 }}>{err}</p>}
 
       <div className="row" style={{ marginTop: 16 }}>
@@ -839,6 +858,7 @@ export function ParticipantPage() {
   const [stepErr, setStepErr] = useState<string | null>(null);
   const [invalidStep3, setInvalidStep3] = useState({ hardest: false, text: false });
   const [maxReached, setMaxReached] = useState(1);
+  const [participantName, setParticipantName] = useState("");
   const topRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -929,7 +949,11 @@ export function ParticipantPage() {
 
     setSubmitting(true);
     try {
-      await apiSend("/api/public/responses", "POST", { studyVersionId: version.id, answers });
+      await apiSend("/api/public/responses", "POST", {
+        studyVersionId: version.id,
+        answers,
+        participantName: participantName.trim(),
+      });
       setDone(true);
     } catch (e) {
       setSubmitErr(e instanceof Error ? e.message : "Falha ao enviar");
@@ -1012,6 +1036,8 @@ export function ParticipantPage() {
               onSubmit={() => void submit()}
               title={dynamicSettings.step5Title}
               sub={dynamicSettings.step5Sub}
+              participantName={participantName}
+              onParticipantNameChange={setParticipantName}
             />
           )}
         </motion.div>

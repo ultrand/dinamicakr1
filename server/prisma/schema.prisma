@@ -72,6 +72,7 @@ model Response {
   studyVersionId   String
   studyVersion     StudyVersion @relation(fields: [studyVersionId], references: [id], onDelete: Cascade)
   createdAt        DateTime @default(now())
+  participantName  String   @default("")
 
   criticalSelections   CriticalSelection[]
   criticalRanks        CriticalRank[]

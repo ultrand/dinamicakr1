@@ -81,7 +81,12 @@ publicRouter.post("/responses", async (req, res) => {
     const { studyVersionId, answers } = req.body as {
       studyVersionId: string;
       answers: AnswerIn[];
+      participantName?: string;
     };
+    const participantName = typeof req.body?.participantName === "string"
+      ? req.body.participantName.trim().slice(0, 120)
+      : "";
+
     if (!studyVersionId || !Array.isArray(answers)) {
       res.status(400).json({ error: "Payload inválido" });
       return;
@@ -224,7 +229,7 @@ publicRouter.post("/responses", async (req, res) => {
 
     const response = await prisma.$transaction(async (tx) => {
       const r = await tx.response.create({
-        data: { studyVersionId },
+        data: { studyVersionId, participantName },
       });
 
       for (const a of answers) {
