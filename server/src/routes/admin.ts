@@ -228,8 +228,9 @@ adminRouter.delete("/tasks/:id", async (req, res) => {
   }
 });
 
-const CORE_Q_TYPES = ["critical_select", "critical_rank", "hardest_critical", "text_long", "flow_builder_per_critical"] as const;
-const Q_TYPES = new Set<string>(CORE_Q_TYPES);
+const Q_TYPES_ALL = ["critical_select", "critical_rank", "hardest_critical", "text_long", "flow_builder_per_critical"] as const;
+const REQUIRED_Q_TYPES = ["critical_select", "hardest_critical", "text_long", "flow_builder_per_critical"] as const;
+const Q_TYPES = new Set<string>(Q_TYPES_ALL);
 
 async function validatePublishableDraft(draftId: string) {
   const [taskCount, questions] = await Promise.all([
@@ -239,9 +240,9 @@ async function validatePublishableDraft(draftId: string) {
   if (taskCount === 0) return "Rascunho precisa de ao menos 1 card ativo";
   const counts = new Map<string, number>();
   for (const q of questions) counts.set(q.type, (counts.get(q.type) ?? 0) + 1);
-  const missing = CORE_Q_TYPES.filter((type) => !counts.has(type));
+  const missing = REQUIRED_Q_TYPES.filter((type) => !counts.has(type));
   if (missing.length) return `Perguntas obrigatórias ausentes: ${missing.join(", ")}`;
-  const duplicated = CORE_Q_TYPES.filter((type) => (counts.get(type) ?? 0) > 1);
+  const duplicated = Q_TYPES_ALL.filter((type) => (counts.get(type) ?? 0) > 1);
   if (duplicated.length) return `Há perguntas duplicadas para: ${duplicated.join(", ")}. O participante usa uma pergunta por tipo.`;
   return null;
 }
