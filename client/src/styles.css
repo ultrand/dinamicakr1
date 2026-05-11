@@ -1932,3 +1932,49 @@ td input:focus, td select:focus {
   }
   .response-forms-id { margin-left: 0; width: 100%; }
 }
+
+/* Análise — textos de apoio (leitura rápida) */
+.analytics-reading-guide {
+  margin-bottom: var(--gap-md);
+}
+.analytics-reading-guide summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: var(--gap-sm) 0;
+}
+.analytics-reading-guide .panel-body {
+  padding-top: 0;
+}
+.analytics-help-h {
+  font-size: var(--fs-sm);
+  margin: var(--gap-md) 0 var(--gap-xs);
+  color: var(--ink);
+}
+.analytics-help-ul {
+  margin: 0 0 var(--gap-sm);
+  padding-left: 1.2rem;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.analytics-help-ul li { margin-bottom: var(--gap-xs); }
+.analytics-lede {
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  max-width: 62rem;
+}
+.analytics-inline-note {
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  margin: 0 0 var(--gap-sm);
+  padding: var(--gap-sm) var(--gap-md);
+  background: #eef2ff;
+  border-radius: var(--r-sm);
+  border: 1px solid #c7d2fe;
+  color: var(--ink);
+}
+.analytics-inline-note.muted {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--ink-2);
+}

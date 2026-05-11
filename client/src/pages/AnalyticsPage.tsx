@@ -89,6 +89,8 @@ type Analytics = {
   disagreementIndex: Disagree[];
   hardestCounts: HardestCount[];
   flowCoverageTop5: FlowCov[];
+  /** ranking = posições 1–5 do passo "ordenar"; selecao = fallback pelas mais marcadas na seleção */
+  flowCoverageBasis: "ranking" | "selecao" | "none";
   whyKeywordsTop: Keyword[];
   longTextKeywordsTop: Keyword[];
   responses: ResponseIdentity[];
@@ -139,6 +141,7 @@ export function AnalyticsPage() {
     lines.push(["meta", "version_number", version ? `v${version.number}` : "desconhecida"].map(csvCell).join(","));
     lines.push(["meta", "critical_filter", critFilter || "todas"].map(csvCell).join(","));
     lines.push(["meta", "responses_count", data.responses.length].map(csvCell).join(","));
+    lines.push(["meta", "flow_coverage_basis", data.flowCoverageBasis ?? "none"].map(csvCell).join(","));
 
     const pushRank = (metric: string, rows: { label: string; count: number }[]) => {
       rows.forEach((r, i) => lines.push(["ranking", metric, i + 1, r.label, r.count].map(csvCell).join(",")));
@@ -301,6 +304,8 @@ export function AnalyticsPage() {
         ))}
       </div>
 
+      <AnalyticsReadingGuide activeSection={section} />
+
       {loadingVersions ? (
         <p className="muted">Carregando versões…</p>
       ) : versions.length === 0 ? (
@@ -325,6 +330,9 @@ export function AnalyticsPage() {
         <>
           {section === "ranking" && (
             <div className="stack-s">
+              <p className="analytics-lede muted" style={{ margin: "0 0 4px" }}>
+                <strong>Visão geral:</strong> contagens e palavras-chave. Quem respondeu o quê, linha a linha, está na aba <strong>Por resposta</strong>.
+              </p>
               <div className="panel">
                 <div className="panel-hd">Respostas recebidas (horário e identificação)</div>
                 <div className="panel-body">
@@ -363,6 +371,9 @@ export function AnalyticsPage() {
                 <div className="panel">
                   <div className="panel-hd">Críticas mais selecionadas</div>
                   <div className="panel-body">
+                    <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                      Quantas vezes cada card foi marcado como <strong>crítico</strong> no passo de seleção (uma pessoa pode marcar vários).
+                    </p>
                     <RankList rows={data.criticalRanking} max={maxRank(data.criticalRanking)} />
                   </div>
                 </div>
@@ -370,6 +381,12 @@ export function AnalyticsPage() {
                   <div className="panel-hd">Top-5 mais frequentes no ranking</div>
                   <div className="panel-body">
                     <RankList rows={data.top5Ranking} max={maxRank(data.top5Ranking)} />
+                    {!data.top5Ranking.length && (
+                      <p className="analytics-lede muted" style={{ marginTop: 10 }}>
+                        Só preenche se existir a etapa em que o participante <strong>ordena</strong> as críticas e já houver respostas com essa ordenação.
+                        Se o formulário não tem essa pergunta, ignore este bloco — os outros gráficos continuam válidos.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -382,6 +399,11 @@ export function AnalyticsPage() {
                   </div>
                   <div className="panel-body">
                     <AvgPosList rows={data.avgRankPosition} />
+                    {!data.avgRankPosition.length && (
+                      <p className="analytics-lede muted" style={{ marginTop: 10 }}>
+                        Precisa dos dados de <strong>ranking</strong> (ordenar tarefas). Sem isso, fica vazio.
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="panel">
@@ -390,6 +412,11 @@ export function AnalyticsPage() {
                   </div>
                   <div className="panel-body">
                     <DisagreeList rows={data.disagreementIndex} />
+                    {!data.disagreementIndex.length && (
+                      <p className="analytics-lede muted" style={{ marginTop: 10 }}>
+                        Também depende do <strong>ranking</strong>. Mostra tarefas em que as pessoas discordaram da ordem (quando há várias respostas).
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -399,12 +426,18 @@ export function AnalyticsPage() {
                 <div className="panel">
                   <div className="panel-hd">Tarefa mais difícil (mais citada)</div>
                   <div className="panel-body">
+                    <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                      Votação do passo “qual foi a <strong>mais difícil</strong>” entre as críticas já selecionadas.
+                    </p>
                     <RankList rows={data.hardestCounts} max={maxRank(data.hardestCounts)} />
                   </div>
                 </div>
                 <div className="panel">
                   <div className="panel-hd">Palavras-chave: "por quê é difícil"</div>
                   <div className="panel-body">
+                    <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                      Palavras que mais apareceram nos <strong>textos curtos</strong> do motivo da tarefa mais difícil (automático, não é análise clínica).
+                    </p>
                     <KeywordCloud words={data.whyKeywordsTop} />
                   </div>
                 </div>
@@ -413,6 +446,9 @@ export function AnalyticsPage() {
               <div className="panel">
                 <div className="panel-hd">Palavras-chave: texto longo (dificuldades conceituais)</div>
                 <div className="panel-body">
+                  <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                    Mesma ideia, aplicada ao <strong>campo de texto longo</strong> do formulário.
+                  </p>
                   <KeywordCloud words={data.longTextKeywordsTop} />
                 </div>
               </div>
@@ -421,16 +457,22 @@ export function AnalyticsPage() {
 
           {section === "fluxos" && (
             <div className="stack-s">
+              <p className="analytics-lede muted" style={{ margin: "0 0 4px" }}>
+                <strong>Fluxos</strong> usam só o que as pessoas arrastaram na montagem do caminho até cada tarefa crítica. Nada aqui é mapa nem GPS.
+              </p>
               <div className="analytics-grid">
                 <div className="panel">
-                  <div className="panel-hd">Cobertura dos fluxos (Top-5 do ranking)</div>
+                  <div className="panel-hd">Cobertura dos fluxos (até 5 tarefas-alvo)</div>
                   <div className="panel-body">
-                    <FlowCoveragePanel rows={data.flowCoverageTop5} />
+                    <FlowCoveragePanel rows={data.flowCoverageTop5} basis={data.flowCoverageBasis ?? "none"} />
                   </div>
                 </div>
                 <div className="panel">
                   <div className="panel-hd">Gargalos (pré-requisitos mais usados)</div>
                   <div className="panel-body">
+                    <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                      Conta cada card que apareceu <strong>no meio</strong> do caminho (antes da crítica final). Quanto maior o número, mais vezes serviu de “degrau” para chegar em alguma crítica.
+                    </p>
                     <RankList rows={data.bottleneckRanking} max={maxRank(data.bottleneckRanking)} />
                   </div>
                 </div>
@@ -440,12 +482,18 @@ export function AnalyticsPage() {
                 <div className="panel">
                   <div className="panel-hd">Passo 1 — mais frequente nos fluxos</div>
                   <div className="panel-body">
+                    <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                      Só olha a <strong>primeira posição</strong> de cada fluxo preenchido: qual card costuma começar a sequência. Com poucos envios, muitos empates em “1” são normais.
+                    </p>
                     <RankList rows={data.step1Ranking} max={maxRank(data.step1Ranking)} />
                   </div>
                 </div>
                 <div className="panel">
                   <div className="panel-hd">Caminho mais comum por crítica</div>
                   <div className="panel-body">
+                    <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                      Para <strong>cada</strong> tarefa crítica, qual sequência inteira apareceu mais vezes. <strong>n</strong> = quantas vezes essa sequência venceu; <strong>%</strong> = dentro daquela crítica, que parcela dos fluxos foi essa sequência.
+                    </p>
                     <div className="table-wrap" style={{ border: "none", borderRadius: 0 }}>
                       <table>
                         <thead>
@@ -480,8 +528,13 @@ export function AnalyticsPage() {
 
           {section === "grafo" && (
             <div className="panel">
-              <div className="panel-hd">Grafo de transições A → B (espessura = frequência)</div>
+              <div className="panel-hd">Transições no fluxo (lista A → B)</div>
               <div className="panel-body">
+                <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                  <strong>Não é um desenho em bolhas.</strong> Cada linha é um par “tarefa de onde saiu → tarefa para onde foi”, quando alguém colocou as duas <strong>seguidas</strong> no mesmo fluxo.
+                  O número à esquerda (ex.: 3×) é quantas vezes esse salto apareceu no total. A barra roxa é só visual: mais longa = mais frequente.
+                  Se quase tudo está 1×, é porque cada caminho ainda é quase único — com mais respostas, alguns pares sobem.
+                </p>
                 {data.graph.edges.length > 60 && (
                   <p className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 0 }}>
                     Mostrando as 60 transições mais fortes de {data.graph.edges.length}.
@@ -510,6 +563,59 @@ export function AnalyticsPage() {
 }
 
 /* ── Sub-components ─────────────────────────────────────── */
+
+function AnalyticsReadingGuide({
+  activeSection,
+}: {
+  activeSection: "ranking" | "fluxos" | "grafo" | "respostas";
+}) {
+  const tabLabel =
+    activeSection === "ranking"
+      ? "Ranking & Seleção"
+      : activeSection === "fluxos"
+        ? "Fluxos"
+        : activeSection === "grafo"
+          ? "Transições (lista A → B)"
+          : "Por resposta";
+
+  return (
+    <details className="panel analytics-reading-guide">
+      <summary>O que significa cada bloco? (guia — pode fechar depois de ler)</summary>
+      <div className="panel-body">
+        <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+          Aba aberta agora: <strong>{tabLabel}</strong>. Cada aba também tem um parágrafo curto em cima dos gráficos.
+        </p>
+
+        <h3 className="analytics-help-h">Ranking &amp; Seleção</h3>
+        <ul className="analytics-help-ul">
+          <li><strong>Lista de envios</strong> — quem mandou e quando (nome é opcional).</li>
+          <li><strong>Críticas mais selecionadas</strong> — vezes que cada card foi marcado como crítico.</li>
+          <li><strong>Ranking / posição média / divergência</strong> — só funcionam se o formulário tiver o passo de <strong>ordenar</strong> as críticas e já existirem respostas com isso.</li>
+          <li><strong>Mais difícil</strong> — qual tarefa foi escolhida como a mais difícil, e nuvem de palavras nos motivos.</li>
+        </ul>
+
+        <h3 className="analytics-help-h">Fluxos</h3>
+        <ul className="analytics-help-ul">
+          <li><strong>Cobertura</strong> — para até cinco tarefas-alvo, quantos participantes montaram um caminho, deixaram vazio ou “pularam” na prática (ver contadores no card).</li>
+          <li><strong>Gargalos</strong> — cards que mais aparecem como passo intermediário (não a crítica final).</li>
+          <li><strong>Passo 1</strong> — primeiro card de cada fluxo que alguém preencheu.</li>
+          <li><strong>Caminho dominante</strong> — para cada crítica, a sequência que mais se repetiu.</li>
+        </ul>
+
+        <h3 className="analytics-help-h">Transições (lista A → B)</h3>
+        <ul className="analytics-help-ul">
+          <li><strong>Não é mapa nem desenho em rede.</strong> É uma lista: de uma tarefa para a seguinte no mesmo fluxo.</li>
+          <li><strong>Número ×</strong> — quantas vezes esse par apareceu no total. Poucos envios → muitos “1×” e barras iguais é esperado.</li>
+        </ul>
+
+        <h3 className="analytics-help-h">Por resposta</h3>
+        <ul className="analytics-help-ul">
+          <li><strong>Cada envio completo</strong>, pergunta a pergunta, como em relatório de formulário.</li>
+        </ul>
+      </div>
+    </details>
+  );
+}
 
 function ResponseFormsPanel({
   loading,
@@ -779,10 +885,34 @@ function DisagreeList({ rows }: { rows: Disagree[] }) {
   );
 }
 
-function FlowCoveragePanel({ rows }: { rows: FlowCov[] }) {
-  if (!rows.length) return <p className="muted">Sem dados de fluxo.</p>;
+function FlowCoveragePanel({
+  rows,
+  basis,
+}: {
+  rows: FlowCov[];
+  basis: "ranking" | "selecao" | "none";
+}) {
+  if (!rows.length) {
+    return (
+      <p className="muted">
+        {basis === "none"
+          ? "Ainda não dá para montar esta visão (sem seleções ou sem versão com dados)."
+          : "Não há fluxos gravados para essas tarefas-alvo — ou todos os fluxos estão vazios nas respostas."}
+      </p>
+    );
+  }
   return (
     <div className="stack-s">
+      {basis === "selecao" && (
+        <p className="analytics-inline-note" role="note">
+          <strong>Sem ranking salvo.</strong> Usamos as <strong>cinco críticas mais marcadas</strong> na seleção como alvo (mesma ideia da cobertura, com outra base).
+        </p>
+      )}
+      {basis === "ranking" && (
+        <p className="analytics-inline-note muted" role="note">
+          Base: tarefas que mais apareceram nas <strong>posições 1 a 5</strong> do passo de ordenação.
+        </p>
+      )}
       {rows.map((r) => (
         <div key={r.criticalTaskId} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 4 }}>
           <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, gridColumn: "1/-1" }}>{r.label}</span>

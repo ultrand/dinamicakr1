@@ -151,27 +151,39 @@ export async function buildAnalytics(studyVersionId: string, filterCriticalTaskI
     }
   }
 
-  // flowCoverageTop5: por task entre as top5 mais rankeadas
-  const top5Ids = top5Ranking.slice(0, 5).map((x) => x.taskId);
-  const totalResponses = await prisma.response.count({ where: { studyVersionId } });
-  const flowCoverageTop5 = top5Ids.map((tid) => {
-    const f = flowsByCrit[tid] ?? { filled: 0, empty: 0 };
-    const total = totalResponses;
-    const skipped = Math.max(0, total - f.filled - f.empty);
-    return {
-      criticalTaskId: tid,
-      label: taskLabel(tid),
-      filledCount: f.filled,
-      skippedCount: skipped,
-      emptyCount: f.empty,
-      filledPercent: total > 0 ? Math.round((f.filled / total) * 100) : 0,
-    };
-  });
-
   const toRank = (rec: Record<string, number>) =>
     Object.entries(rec)
       .map(([taskId, count]) => ({ taskId, count, label: taskLabel(taskId) }))
       .sort((a, b) => b.count - a.count);
+
+  // Cobertura: idealmente as 5 tarefas que mais aparecem nas posições 1–5 do ranking.
+  // Se não houver ranking (pergunta ausente ou nenhuma resposta gravada), usa as 5 críticas mais selecionadas.
+  const top5IdsFromRanking = top5Ranking.slice(0, 5).map((x) => x.taskId);
+  const top5IdsFromSelection = toRank(selCount)
+    .slice(0, 5)
+    .map((x) => x.taskId);
+  const top5IdsForCoverage =
+    top5IdsFromRanking.length > 0 ? top5IdsFromRanking : top5IdsFromSelection;
+  const flowCoverageBasis: "ranking" | "selecao" | "none" =
+    top5IdsFromRanking.length > 0 ? "ranking" : top5IdsFromSelection.length > 0 ? "selecao" : "none";
+
+  const totalResponses = await prisma.response.count({ where: { studyVersionId } });
+  const flowCoverageTop5 =
+    flowCoverageBasis === "none"
+      ? []
+      : top5IdsForCoverage.map((tid) => {
+          const f = flowsByCrit[tid] ?? { filled: 0, empty: 0 };
+          const total = totalResponses;
+          const skipped = Math.max(0, total - f.filled - f.empty);
+          return {
+            criticalTaskId: tid,
+            label: taskLabel(tid),
+            filledCount: f.filled,
+            skippedCount: skipped,
+            emptyCount: f.empty,
+            filledPercent: total > 0 ? Math.round((f.filled / total) * 100) : 0,
+          };
+        });
 
   const commonPaths = Object.entries(sequencesByCritical).map(([criticalTaskId, freq]) => {
     const entries = Object.entries(freq);
@@ -208,6 +220,7 @@ export async function buildAnalytics(studyVersionId: string, filterCriticalTaskI
     flowCoverageTop5,
     whyKeywordsTop,
     longTextKeywordsTop,
+    flowCoverageBasis,
     responses: responseRows.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
