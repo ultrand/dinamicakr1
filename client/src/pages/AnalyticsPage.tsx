@@ -392,6 +392,11 @@ export function AnalyticsPage() {
                 <div className="panel">
                   <div className="panel-hd">Top-5 mais frequentes no ranking</div>
                   <div className="panel-body">
+                    <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                      <strong>Como é calculado:</strong> em cada resposta, cada tarefa tem uma posição no ranking (1 = mais prioritária).
+                      Somamos <strong>+1</strong> a esta tarefa <strong>só quando a posição é 1, 2, 3, 4 ou 5</strong> naquele envio.
+                      Depois ordenamos do maior total para o menor. Posições 6 ou piores <strong>não entram</strong> nesta contagem.
+                    </p>
                     <RankList rows={data.top5Ranking} max={maxRank(data.top5Ranking)} />
                     {!data.top5Ranking.length && (
                       <p className="analytics-lede muted" style={{ marginTop: 10 }}>
@@ -410,6 +415,11 @@ export function AnalyticsPage() {
                     Posição média no ranking ↓ melhor
                   </div>
                   <div className="panel-body">
+                    <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                      <strong>Como é calculado:</strong> para cada tarefa, pegamos todas as posições que ela teve nas respostas (1, 2, 3…).
+                      A coluna principal é a <strong>média aritmética</strong> desses números. Quanto <strong>menor</strong> a média, mais no topo o grupo colocou essa tarefa em geral.
+                      “n” = em quantas respostas essa tarefa apareceu no ranking.
+                    </p>
                     <AvgPosList rows={data.avgRankPosition} />
                     {!data.avgRankPosition.length && (
                       <p className="analytics-lede muted" style={{ marginTop: 10 }}>
@@ -423,6 +433,10 @@ export function AnalyticsPage() {
                     Divergência de posição (controversas)
                   </div>
                   <div className="panel-body">
+                    <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+                      <strong>Como é calculado:</strong> para cada tarefa, calculamos o <strong>desvio-padrão</strong> (σ) das posições entre as respostas.
+                      σ <strong>alto</strong> = uns colocaram a tarefa cedo no ranking, outros tarde (mais controvérsia). σ <strong>baixo ou zero</strong> = consenso na ordem, ou só <strong>uma</strong> resposta ranqueou essa tarefa (não há dispersão).
+                    </p>
                     <DisagreeList rows={data.disagreementIndex} />
                     {!data.disagreementIndex.length && (
                       <p className="analytics-lede muted" style={{ marginTop: 10 }}>
@@ -470,13 +484,17 @@ export function AnalyticsPage() {
           {section === "fluxos" && (
             <div className="stack-s">
               <p className="analytics-lede muted" style={{ margin: "0 0 4px" }}>
-                <strong>Fluxos</strong> usam só o que as pessoas arrastaram na montagem do caminho até cada tarefa crítica. Nada aqui é mapa nem GPS.
+                <strong>Fluxos</strong> = sequência de cards que cada pessoa montou até uma <strong>tarefa crítica-alvo</strong> (passo do formulário). Não é mapa nem GPS.
               </p>
               <div className="analytics-grid">
                 <div className="panel">
                   <div className="panel-hd">Cobertura dos fluxos (até 5 tarefas-alvo)</div>
                   <div className="panel-body">
-                    <FlowCoveragePanel rows={data.flowCoverageTop5} basis={data.flowCoverageBasis ?? "none"} />
+                    <FlowCoveragePanel
+                      rows={data.flowCoverageTop5}
+                      basis={data.flowCoverageBasis ?? "none"}
+                      totalSubmissions={data.responses.length}
+                    />
                   </div>
                 </div>
                 <div className="panel">
@@ -504,7 +522,12 @@ export function AnalyticsPage() {
                   <div className="panel-hd">Caminho mais comum por crítica</div>
                   <div className="panel-body">
                     <p className="analytics-lede muted" style={{ marginTop: 0 }}>
-                      Para <strong>cada</strong> tarefa crítica, qual sequência inteira apareceu mais vezes. <strong>n</strong> = quantas vezes essa sequência venceu; <strong>%</strong> = dentro daquela crítica, que parcela dos fluxos foi essa sequência.
+                      <strong>Uma linha por tarefa crítica</strong> que alguém usou como <strong>alvo</strong> ao montar um fluxo (aparece no sistema como “crítica desse cartão”).
+                      <strong> n</strong> = vezes que a sequência mais frequente apareceu para essa crítica; <strong>%</strong> = essas <strong>n</strong> vezes em relação a <strong>todos</strong> os fluxos guardados com essa mesma crítica-alvo.
+                    </p>
+                    <p className="analytics-lede muted" style={{ marginTop: 8 }}>
+                      <strong>Por que às vezes há menos linhas que respostas?</strong> Há {data.responses.length} envio(s) nesta versão e {data.commonPathByCritical.length} crítica(s) distinta(s) com fluxo gravado.
+                      Se várias pessoas desenharam fluxo só para as <strong>mesmas</strong> tarefas-alvo, o número de linhas não cresce — não é bug.
                     </p>
                     <div className="table-wrap" style={{ border: "none", borderRadius: 0 }}>
                       <table>
@@ -546,9 +569,11 @@ export function AnalyticsPage() {
               <div className="panel-hd">Transições no fluxo (lista A → B)</div>
               <div className="panel-body">
                 <p className="analytics-lede muted" style={{ marginTop: 0 }}>
-                  <strong>Não é um desenho em bolhas.</strong> Cada linha é um par “tarefa de onde saiu → tarefa para onde foi”, quando alguém colocou as duas <strong>seguidas</strong> no mesmo fluxo.
-                  O número à esquerda (ex.: 3×) é quantas vezes esse salto apareceu no total. A barra roxa é só visual: mais longa = mais frequente.
-                  Se quase tudo está 1×, é porque cada caminho ainda é quase único — com mais respostas, alguns pares sobem.
+                  <strong>O que é:</strong> cada linha conta um salto <strong>A → B</strong> quando duas tarefas ficaram <strong>vizinhas</strong> na mesma sequência de fluxo (A imediatamente antes de B).
+                  <strong> N×</strong> = quantas vezes esse par apareceu no total. A barra roxa só compara tamanhos entre linhas (não é rede nem mapa).
+                </p>
+                <p className="analytics-lede muted" style={{ marginTop: 8 }}>
+                  Com poucos envios costuma haver muitos “1×”: caminhos ainda muito diferentes. Com mais dados, alguns pares repetem e sobem.
                 </p>
                 {data.graph.edges.length > 60 && (
                   <p className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 0 }}>
@@ -604,23 +629,35 @@ function AnalyticsReadingGuide({
         <h3 className="analytics-help-h">Ranking &amp; Seleção</h3>
         <ul className="analytics-help-ul">
           <li><strong>Lista de envios</strong> — quem mandou e quando (nome é opcional).</li>
-          <li><strong>Críticas mais selecionadas</strong> — vezes que cada card foi marcado como crítico.</li>
-          <li><strong>Ranking / posição média / divergência</strong> — só funcionam se o formulário tiver o passo de <strong>ordenar</strong> as críticas e já existirem respostas com isso.</li>
-          <li><strong>Mais difícil</strong> — qual tarefa foi escolhida como a mais difícil, e nuvem de palavras nos motivos.</li>
+          <li><strong>Críticas mais selecionadas</strong> — vezes que cada card foi marcado como crítico no passo 1 (com ranking, a lista reordena por média de posição; ver texto no painel).</li>
+          <li>
+            <strong>Top-5 mais frequentes no ranking</strong> — em cada resposta, cada tarefa ranqueada nas posições <strong>1 a 5</strong> soma +1. Ordena-se pelo total (não entra posição 6+).
+          </li>
+          <li>
+            <strong>Posição média</strong> — para cada tarefa, a média das posições (1, 2, 3…) em todas as respostas em que apareceu no ranking. Menor = mais prioritária em consenso.
+          </li>
+          <li>
+            <strong>Divergência (σ)</strong> — desvio-padrão dessas posições: alto = discordância entre pessoas; com uma só resposta que ranqueou a tarefa, σ fica 0.
+          </li>
+          <li><strong>Mais difícil</strong> — votação do passo “qual foi a mais difícil” e nuvem de palavras nos motivos.</li>
         </ul>
 
         <h3 className="analytics-help-h">Fluxos</h3>
         <ul className="analytics-help-ul">
-          <li><strong>Cobertura</strong> — para até cinco tarefas-alvo, quantos participantes montaram um caminho, deixaram vazio ou “pularam” na prática (ver contadores no card).</li>
-          <li><strong>Gargalos</strong> — cards que mais aparecem como passo intermediário (não a crítica final).</li>
-          <li><strong>Passo 1</strong> — primeiro card de cada fluxo que alguém preencheu.</li>
-          <li><strong>Caminho dominante</strong> — para cada crítica, a sequência que mais se repetiu.</li>
+          <li>
+            <strong>Cobertura</strong> — até 5 tarefas-alvo (top do ranking ou, sem ranking, as 5 mais selecionadas). Para cada alvo: quantos <strong>cartões</strong> têm cadeia com passos, quantos <strong>sem cartão</strong> (não há fluxo gravado com essa crítica como alvo naquele envio), quantos <strong>vazios</strong> (cartão sem passos). O símbolo “→” entre tarefas noutras tabelas é só “depois vem”; na cobertura não usamos seta para “sem cartão”.
+          </li>
+          <li><strong>Gargalos</strong> — cards que mais aparecem no <strong>meio</strong> do caminho (não a crítica-alvo final).</li>
+          <li><strong>Passo 1 do fluxo</strong> — primeiro card de cada cadeia preenchida.</li>
+          <li>
+            <strong>Caminho mais comum por crítica</strong> — uma linha por <strong>crítica-alvo distinta</strong> que tenha fluxo gravado; por isso pode haver menos linhas que número de respostas se todos desenharam fluxo para o mesmo subconjunto de críticas.
+          </li>
         </ul>
 
         <h3 className="analytics-help-h">Transições (lista A → B)</h3>
         <ul className="analytics-help-ul">
-          <li><strong>Não é mapa nem desenho em rede.</strong> É uma lista: de uma tarefa para a seguinte no mesmo fluxo.</li>
-          <li><strong>Número ×</strong> — quantas vezes esse par apareceu no total. Poucos envios → muitos “1×” e barras iguais é esperado.</li>
+          <li>Lista de pares <strong>A → B</strong> consecutivos nos fluxos; <strong>N×</strong> = quantas vezes o par apareceu.</li>
+          <li>Não é grafo interativo: é só ranking de pares para leitura rápida.</li>
         </ul>
 
         <h3 className="analytics-help-h">Por resposta</h3>
@@ -924,9 +961,12 @@ function DisagreeList({ rows }: { rows: Disagree[] }) {
 function FlowCoveragePanel({
   rows,
   basis,
+  totalSubmissions,
 }: {
   rows: FlowCov[];
   basis: "ranking" | "selecao" | "none";
+  /** Total de envios na versão (para contextualizar os contadores). */
+  totalSubmissions: number;
 }) {
   if (!rows.length) {
     return (
@@ -939,26 +979,52 @@ function FlowCoveragePanel({
   }
   return (
     <div className="stack-s">
+      <p className="analytics-lede muted" style={{ marginTop: 0 }}>
+        <strong>O que mede:</strong> escolhemos até <strong>5 tarefas-alvo</strong> (as que mais aparecem no <strong>top 5 do ranking</strong>, ou, sem ranking, as <strong>cinco mais marcadas</strong> como críticas).
+        Para <strong>cada</strong> alvo contamos <strong>cartões de fluxo</strong> guardados no servidor com essa tarefa como crítica.
+        Envios nesta versão: <strong>{totalSubmissions}</strong>.
+      </p>
       {basis === "selecao" && (
         <p className="analytics-inline-note" role="note">
-          <strong>Sem ranking salvo.</strong> Usamos as <strong>cinco críticas mais marcadas</strong> na seleção como alvo (mesma ideia da cobertura, com outra base).
+          <strong>Sem ranking salvo.</strong> Os 5 alvos são as <strong>cinco críticas mais selecionadas</strong> (passo 1).
         </p>
       )}
       {basis === "ranking" && (
         <p className="analytics-inline-note muted" role="note">
-          Base: tarefas que mais apareceram nas <strong>posições 1 a 5</strong> do passo de ordenação.
+          Os 5 alvos são as tarefas com maior contagem no bloco <strong>“Top-5 mais frequentes no ranking”</strong> (posições 1–5 por resposta).
         </p>
       )}
-      <p className="muted" style={{ fontSize: "var(--fs-xs)", margin: 0 }}>
-        <strong>✓</strong> fluxo com passos preenchidos · <strong>→</strong> participante não chegou a montar fluxo para essa crítica · <strong>✗</strong> fluxo existente mas sem nenhum passo · barra = % com fluxo preenchido
-      </p>
+      <div className="flow-coverage-legend" role="region" aria-label="Legenda da cobertura de fluxos">
+        <div className="flow-coverage-legend-row">
+          <span className="badge badge-y">Com passos</span>
+          <span className="muted flow-coverage-legend-def">
+            cartões com pelo menos um passo na cadeia até essa crítica-alvo.
+          </span>
+        </div>
+        <div className="flow-coverage-legend-row">
+          <span className="badge flow-coverage-badge-skip">Sem cartão</span>
+          <span className="muted flow-coverage-legend-def">
+            entre os <strong>{totalSubmissions}</strong> envios, quantos <strong>não têm</strong> registo de fluxo com esta tarefa como alvo (= envios − com passos − vazio).
+            Não é “seta do fluxo”; é “falta de cartão” para essa crítica.
+          </span>
+        </div>
+        <div className="flow-coverage-legend-row">
+          <span className="badge flow-coverage-badge-empty">Vazio</span>
+          <span className="muted flow-coverage-legend-def">
+            existe cartão de fluxo para essa crítica, mas a pessoa não colocou nenhum passo (cadeia vazia).
+          </span>
+        </div>
+        <p className="muted flow-coverage-legend-def" style={{ margin: "4px 0 0" }}>
+          <strong>% preenchidos</strong> = “com passos” ÷ {totalSubmissions} envios (percentagem aproximada de quem montou caminho para aquele alvo).
+        </p>
+      </div>
       {rows.map((r) => (
         <div key={r.criticalTaskId} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 4 }}>
           <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, gridColumn: "1/-1" }}>{r.label}</span>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <span className="badge badge-y" title="Preenchidos">{r.filledCount} ✓</span>
-            <span className="badge" style={{ background: "#fef3c7", color: "#92400e" }} title="Pulados">{r.skippedCount} →</span>
-            <span className="badge" style={{ background: "#fee2e2", color: "#991b1b" }} title="Vazios">{r.emptyCount} ✗</span>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+            <span className="badge badge-y" title="Fluxos com pelo menos um passo">{r.filledCount} com passos</span>
+            <span className="badge flow-coverage-badge-skip" title="Envios sem cartão de fluxo para esta crítica-alvo">{r.skippedCount} sem cartão</span>
+            <span className="badge flow-coverage-badge-empty" title="Cartão existe mas sem passos">{r.emptyCount} vazio</span>
           </div>
           <span style={{ fontSize: "var(--fs-xs)", color: "var(--ink-2)", alignSelf: "center" }}>
             {r.filledPercent}% preenchidos

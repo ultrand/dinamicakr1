@@ -1945,6 +1945,35 @@ td input:focus, td select:focus {
   line-height: 1.45;
   margin: 0 0 var(--gap-sm);
 }
+
+/* Análise — legenda cobertura de fluxos (evita confundir “→” com seta da sequência) */
+.flow-coverage-legend {
+  padding: var(--gap-sm) 0;
+  border-top: 1px solid var(--border-l);
+  border-bottom: 1px solid var(--border-l);
+  margin-bottom: var(--gap-sm);
+}
+.flow-coverage-legend-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--gap-sm) var(--gap-md);
+  align-items: start;
+  margin-bottom: var(--gap-xs);
+}
+.flow-coverage-legend-def {
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+}
+.flow-coverage-badge-skip {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.flow-coverage-badge-empty {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
 .analytics-path-crit-cell {
   max-width: 14rem;
   min-width: 8rem;
