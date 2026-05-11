@@ -96,6 +96,8 @@ type Analytics = {
   criticalSelectionOrderedByRank?: boolean;
   whyKeywordsTop: Keyword[];
   longTextKeywordsTop: Keyword[];
+  /** Cartões de fluxo gravados (Path): total e quantos têm cadeia com passos. */
+  flowPathStats?: { totalPathRows: number; withSteps: number; emptySteps: number };
   responses: ResponseIdentity[];
 };
 type Ver = { id: string; number: number; publishedAt: string | null; _count: { responses: number } };
@@ -146,6 +148,13 @@ export function AnalyticsPage() {
     lines.push(["meta", "responses_count", data.responses.length].map(csvCell).join(","));
     lines.push(["meta", "flow_coverage_basis", data.flowCoverageBasis ?? "none"].map(csvCell).join(","));
     lines.push(["meta", "critical_list_ordered_by_avg_rank", String(!!data.criticalSelectionOrderedByRank)].map(csvCell).join(","));
+    if (data.flowPathStats) {
+      lines.push(
+        ["meta", "flow_path_rows", String(data.flowPathStats.totalPathRows), String(data.flowPathStats.withSteps), String(data.flowPathStats.emptySteps)]
+          .map(csvCell)
+          .join(","),
+      );
+    }
 
     const pushRank = (metric: string, rows: { label: string; count: number }[]) => {
       rows.forEach((r, i) => lines.push(["ranking", metric, i + 1, r.label, r.count].map(csvCell).join(",")));
@@ -529,14 +538,25 @@ export function AnalyticsPage() {
                       <strong>Por que às vezes há menos linhas que respostas?</strong> Há {data.responses.length} envio(s) nesta versão e {data.commonPathByCritical.length} crítica(s) distinta(s) com fluxo gravado.
                       Se várias pessoas desenharam fluxo só para as <strong>mesmas</strong> tarefas-alvo, o número de linhas não cresce — não é bug.
                     </p>
+                    {data.flowPathStats && (
+                      <p className="analytics-lede muted" style={{ marginTop: 8 }}>
+                        <strong>Cartões de fluxo no servidor:</strong> {data.flowPathStats.totalPathRows} no total
+                        ({data.flowPathStats.withSteps} com pelo menos um passo, {data.flowPathStats.emptySteps} vazios).
+                        O mínimo do formulário é <strong>≥1 cartão com passos por envio</strong>; por defeito cada pessoa manda <strong>1</strong> cartão (pode acrescentar até 5).
+                        Por isso, com 4 envios costuma haver <strong>≥4</strong> cartões de fluxo gravados no total — mas <strong>esta</strong> tabela <strong>não</strong> é a lista de cartões: é <strong>uma linha por crítica-alvo distinta</strong>. A coluna <strong>n</strong> conta só a <strong>sequência mais repetida</strong> para aquela crítica (não o número de envios).
+                        {critFilter ? (
+                          <> <strong>Filtro de crítica ativo</strong> — estes totais só incluem fluxos dessa crítica.</>
+                        ) : null}
+                      </p>
+                    )}
                     <div className="table-wrap" style={{ border: "none", borderRadius: 0 }}>
                       <table>
                         <thead>
                           <tr>
                             <th>Crítica</th>
                             <th>Sequência dominante</th>
-                            <th>n</th>
-                            <th>%</th>
+                            <th title="Vezes em que esta sequência foi a mais frequente para esta crítica-alvo (não é o nº de envios)">Vezes (moda)</th>
+                            <th title="% dessa sequência em relação a todos os fluxos gravados com esta mesma crítica-alvo">%</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -650,7 +670,7 @@ function AnalyticsReadingGuide({
           <li><strong>Gargalos</strong> — cards que mais aparecem no <strong>meio</strong> do caminho (não a crítica-alvo final).</li>
           <li><strong>Passo 1 do fluxo</strong> — primeiro card de cada cadeia preenchida.</li>
           <li>
-            <strong>Caminho mais comum por crítica</strong> — uma linha por <strong>crítica-alvo distinta</strong> que tenha fluxo gravado; por isso pode haver menos linhas que número de respostas se todos desenharam fluxo para o mesmo subconjunto de críticas.
+            <strong>Caminho mais comum por crítica</strong> — uma linha por <strong>crítica-alvo distinta</strong>. O mínimo do formulário (ex.: 1 fluxo com passos) vale <strong>por envio</strong>, não “1 linha aqui por pessoa”. Cada envio grava <strong>um cartão por slot visível</strong> (por defeito 1 slot). A coluna <strong>n</strong> é a contagem da <strong>sequência vencedora</strong>, não o total de cartões.
           </li>
         </ul>
 

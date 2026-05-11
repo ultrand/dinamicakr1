@@ -205,9 +205,45 @@ export async function buildAnalytics(studyVersionId: string, filterCriticalTaskI
     return { from, to, fromLabel: taskLabel(from!), toLabel: taskLabel(to!), weight };
   });
 
+  /** Um registo Path = um cartão de fluxo no envio (por defeito 1 por pessoa; pode haver até vários se o wizard mostrar mais). */
+  const flowPathStats = {
+    totalPathRows: paths.length,
+    withSteps: paths.filter((p) => p.steps.length > 0).length,
+    emptySteps: paths.filter((p) => p.steps.length === 0).length,
+  };
+
+  /** Críticas selecionadas: com dados de ranking, ordena por posição média (1º = mais prioritária no consenso); senão por nº de seleções. */
+  const criticalRanking = (() => {
+    const ids = Object.keys(selCount);
+    const rows = ids.map((taskId) => {
+      const positions = posAccum[taskId];
+      const avgP =
+        positions && positions.length
+          ? positions.reduce((s, v) => s + v, 0) / positions.length
+          : null;
+      return {
+        taskId,
+        count: selCount[taskId] ?? 0,
+        label: taskLabel(taskId),
+        avgP,
+      };
+    });
+    if (ranks.length === 0) {
+      return rows.sort((a, b) => b.count - a.count).map(({ avgP: _avgP, ...r }) => r);
+    }
+    return rows
+      .sort((a, b) => {
+        if (a.avgP != null && b.avgP != null && Math.abs(a.avgP - b.avgP) > 1e-9) return a.avgP - b.avgP;
+        if (a.avgP != null && b.avgP == null) return -1;
+        if (a.avgP == null && b.avgP != null) return 1;
+        return b.count - a.count;
+      })
+      .map(({ avgP: _avgP, ...r }) => r);
+  })();
+
   return {
     // existentes
-    criticalRanking: toRank(selCount),
+    criticalRanking,
     bottleneckRanking: toRank(bottleneck),
     step1Ranking: toRank(step1),
     commonPathByCritical: commonPaths.sort((a, b) => a.criticalLabel.localeCompare(b.criticalLabel)),
@@ -221,6 +257,8 @@ export async function buildAnalytics(studyVersionId: string, filterCriticalTaskI
     whyKeywordsTop,
     longTextKeywordsTop,
     flowCoverageBasis,
+    criticalSelectionOrderedByRank: ranks.length > 0,
+    flowPathStats,
     responses: responseRows.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
