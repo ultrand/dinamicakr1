@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { apiGet } from "../api";
@@ -15,6 +15,68 @@ type Common = { criticalTaskId: string; criticalLabel: string; sequenceLabel: st
 type Edge   = { from: string; to: string; fromLabel: string; toLabel: string; weight: number };
 type Keyword = { term: string; count: number };
 type ResponseIdentity = { id: string; createdAt: string; participantName: string };
+
+type ResponseDetailBlock =
+  | {
+      questionId: string;
+      type: "critical_select";
+      title: string;
+      helpText: string;
+      tasks: { id: string; label: string }[];
+    }
+  | {
+      questionId: string;
+      type: "critical_rank";
+      title: string;
+      helpText: string;
+      ordered: { position: number; id: string; label: string }[];
+    }
+  | {
+      questionId: string;
+      type: "hardest_critical";
+      title: string;
+      helpText: string;
+      task: { id: string; label: string } | null;
+      whyText: string;
+    }
+  | {
+      questionId: string;
+      type: "text_long";
+      title: string;
+      helpText: string;
+      text: string;
+    }
+  | {
+      questionId: string;
+      type: "flow_builder_per_critical";
+      title: string;
+      helpText: string;
+      flows: {
+        criticalTaskId: string;
+        criticalLabel: string;
+        steps: { id: string; label: string }[];
+        comment: string;
+      }[];
+    }
+  | {
+      questionId: string;
+      type: "unknown_question_type";
+      title: string;
+      helpText: string;
+      note: string;
+    };
+
+type ResponsesDetailPayload = {
+  studyVersionId: string;
+  questions: { id: string; sortOrder: number; type: string; title: string; helpText: string }[];
+  responses: {
+    id: string;
+    createdAt: string;
+    participantName: string;
+    blocks: ResponseDetailBlock[];
+  }[];
+};
+
 type Analytics = {
   criticalRanking: Rank[];
   bottleneckRanking: Rank[];
@@ -61,7 +123,11 @@ export function AnalyticsPage() {
   const [err,          setErr]          = useState<string | null>(null);
   const [loadingVersions, setLoadingVersions] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
-  const [section,      setSection]      = useState<"ranking" | "fluxos" | "grafo">("ranking");
+  const [section,      setSection]      = useState<"ranking" | "fluxos" | "grafo" | "respostas">("ranking");
+  const [responseDetail, setResponseDetail] = useState<ResponsesDetailPayload | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailErr, setDetailErr] = useState<string | null>(null);
+  const [detailQuery, setDetailQuery] = useState("");
 
   const exportAnalyticsCsv = () => {
     if (!data || !versionId) return;
@@ -150,9 +216,32 @@ export function AnalyticsPage() {
     finally { setLoadingData(false); }
   }, [token, versionId, critFilter]);
 
+  const loadResponseDetail = useCallback(async () => {
+    if (!token || !versionId) {
+      setResponseDetail(null);
+      return;
+    }
+    setDetailErr(null);
+    setLoadingDetail(true);
+    try {
+      const q = new URLSearchParams({ versionId });
+      const d = await apiGet<ResponsesDetailPayload>(`/api/admin/responses-detail?${q.toString()}`, token);
+      setResponseDetail(d);
+    } catch (e) {
+      setDetailErr(e instanceof Error ? e.message : "Erro");
+      setResponseDetail(null);
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, [token, versionId]);
+
   useEffect(() => { void loadVers(); }, [loadVers]);
   useEffect(() => { setCritFilter(""); }, [versionId]);
   useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => {
+    if (section !== "respostas") return;
+    void loadResponseDetail();
+  }, [section, loadResponseDetail]);
 
   if (!token) return (
     <motion.div className="page" {...ciapMotion.sectionFade}>
@@ -189,23 +278,25 @@ export function AnalyticsPage() {
             ))}
           </select>
         </div>
-        <div className="field">
-          <label>Filtrar por crítica</label>
-          <select value={critFilter} onChange={(e) => setCritFilter(e.target.value)} style={{ width: 260 }}>
-            <option value="">Todas</option>
-            {critChoices.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
-        </div>
+        {section !== "respostas" && (
+          <div className="field">
+            <label>Filtrar por crítica</label>
+            <select value={critFilter} onChange={(e) => setCritFilter(e.target.value)} style={{ width: 260 }}>
+              <option value="">Todas</option>
+              {critChoices.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {err && <span className="error">{err}</span>}
       </div>
 
       {/* sub-nav */}
       <div className="tabs" style={{ marginBottom: 12 }}>
-        {(["ranking","fluxos","grafo"] as const).map((s) => (
+        {(["ranking","fluxos","grafo","respostas"] as const).map((s) => (
           <button key={s} type="button" className={`tab${section === s ? " active" : ""}`} onClick={() => setSection(s)}>
-            {s === "ranking" ? "Ranking & Seleção" : s === "fluxos" ? "Fluxos" : "Grafo"}
+            {s === "ranking" ? "Ranking & Seleção" : s === "fluxos" ? "Fluxos" : s === "grafo" ? "Grafo" : "Por resposta"}
           </button>
         ))}
       </div>
@@ -219,6 +310,15 @@ export function AnalyticsPage() {
             <p className="muted">Publique um rascunho no Admin para liberar o participante e começar a coletar resultados.</p>
           </div>
         </div>
+      ) : section === "respostas" ? (
+        <ResponseFormsPanel
+          loading={loadingDetail}
+          err={detailErr}
+          detail={responseDetail}
+          query={detailQuery}
+          onQueryChange={setDetailQuery}
+          onRefresh={() => void loadResponseDetail()}
+        />
       ) : loadingData ? (
         <p className="muted">Carregando análise…</p>
       ) : data ? (
@@ -410,6 +510,221 @@ export function AnalyticsPage() {
 }
 
 /* ── Sub-components ─────────────────────────────────────── */
+
+function ResponseFormsPanel({
+  loading,
+  err,
+  detail,
+  query,
+  onQueryChange,
+  onRefresh,
+}: {
+  loading: boolean;
+  err: string | null;
+  detail: ResponsesDetailPayload | null;
+  query: string;
+  onQueryChange: (q: string) => void;
+  onRefresh: () => void;
+}) {
+  const filtered = useMemo(() => {
+    if (!detail?.responses.length) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return detail.responses;
+    return detail.responses.filter((r) => JSON.stringify(r).toLowerCase().includes(q));
+  }, [detail, query]);
+
+  if (loading && !detail) {
+    return <p className="muted">Carregando respostas…</p>;
+  }
+  if (err && !detail) {
+    return (
+      <div className="panel">
+        <div className="panel-body">
+          <p className="error">{err}</p>
+          <button type="button" className="btn" onClick={onRefresh}>Tentar de novo</button>
+        </div>
+      </div>
+    );
+  }
+  if (!detail) {
+    return <p className="muted">Sem dados.</p>;
+  }
+
+  return (
+    <div className="stack-s">
+      <div className="row spread" style={{ flexWrap: "wrap", gap: 8 }}>
+        <p className="muted" style={{ margin: 0, maxWidth: 560 }}>
+          Cada bloco abaixo é um envio completo, na ordem das perguntas configuradas no estudo.
+        </p>
+        <div className="row-s" style={{ flexWrap: "wrap" }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label htmlFor="resp-search">Buscar</label>
+            <input
+              id="resp-search"
+              type="search"
+              placeholder="Nome, ID ou trecho de resposta…"
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              style={{ minWidth: 220 }}
+            />
+          </div>
+          <button type="button" className="btn ghost" onClick={onRefresh} disabled={loading}>
+            {loading ? "Atualizando…" : "Atualizar"}
+          </button>
+        </div>
+      </div>
+
+      {err && (
+        <p className="error" style={{ margin: 0 }}>{err}</p>
+      )}
+
+      {!detail.responses.length ? (
+        <div className="panel">
+          <div className="panel-hd">Nenhum envio nesta versão</div>
+          <div className="panel-body">
+            <p className="muted">Quando houver participantes, as respostas aparecem aqui.</p>
+          </div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <p className="muted">Nenhum envio corresponde à busca.</p>
+      ) : (
+        <div className="response-forms-list">
+          {filtered.map((r, idx) => (
+            <details key={r.id} className="response-forms-card panel" open={idx === 0}>
+              <summary className="response-forms-summary">
+                <span className="response-forms-summary-title">
+                  Envio #{detail.responses.findIndex((x) => x.id === r.id) + 1}
+                </span>
+                <span className="muted" style={{ fontWeight: 400 }}>
+                  {new Date(r.createdAt).toLocaleString("pt-BR")}
+                  {r.participantName ? ` · ${r.participantName}` : ""}
+                </span>
+                <code className="response-forms-id">{r.id}</code>
+              </summary>
+              <div className="panel-body response-forms-body">
+                {r.blocks.map((b) => (
+                  <FormAnswerBlock key={b.questionId} block={b} />
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FormAnswerBlock({ block }: { block: ResponseDetailBlock }) {
+  const qTitle = (
+    <div className="form-answer-q">
+      <strong>{block.title || "(Sem título)"}</strong>
+      {block.helpText ? <p className="muted form-answer-help">{block.helpText}</p> : null}
+    </div>
+  );
+
+  switch (block.type) {
+    case "critical_select":
+      return (
+        <div className="form-answer-row">
+          {qTitle}
+          <div className="form-answer-a">
+            {!block.tasks.length ? (
+              <span className="muted">—</span>
+            ) : (
+              <ul className="form-answer-list">
+                {block.tasks.map((t) => (
+                  <li key={t.id}>{t.label}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      );
+    case "critical_rank":
+      return (
+        <div className="form-answer-row">
+          {qTitle}
+          <div className="form-answer-a">
+            {!block.ordered.length ? (
+              <span className="muted">—</span>
+            ) : (
+              <ol className="form-answer-list form-answer-ol">
+                {block.ordered.map((row) => (
+                  <li key={`${row.id}-${row.position}`}>
+                    <span className="badge" style={{ marginRight: 8 }}>{row.position}º</span>
+                    {row.label}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </div>
+      );
+    case "hardest_critical":
+      return (
+        <div className="form-answer-row">
+          {qTitle}
+          <div className="form-answer-a">
+            {block.task ? <p style={{ margin: "0 0 8px" }}>{block.task.label}</p> : <p className="muted" style={{ margin: "0 0 8px" }}>—</p>}
+            <div className="form-answer-text">{block.whyText || <span className="muted">—</span>}</div>
+          </div>
+        </div>
+      );
+    case "text_long":
+      return (
+        <div className="form-answer-row">
+          {qTitle}
+          <div className="form-answer-a">
+            <div className="form-answer-text">{block.text || <span className="muted">—</span>}</div>
+          </div>
+        </div>
+      );
+    case "flow_builder_per_critical":
+      return (
+        <div className="form-answer-row">
+          {qTitle}
+          <div className="form-answer-a">
+            {!block.flows.length ? (
+              <span className="muted">—</span>
+            ) : (
+              <div className="stack-s" style={{ gap: 12 }}>
+                {block.flows.map((f) => (
+                  <div key={f.criticalTaskId} className="form-answer-flow">
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Crítica: {f.criticalLabel}</div>
+                    {f.steps.length > 0 ? (
+                      <ol className="form-answer-list form-answer-ol" style={{ marginTop: 0 }}>
+                        {f.steps.map((s, i) => (
+                          <li key={`${f.criticalTaskId}-${s.id}-${i}`}>{s.label}</li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="muted" style={{ margin: 0 }}>Fluxo vazio</p>
+                    )}
+                    {f.comment ? (
+                      <div className="form-answer-text form-answer-text-sub">Comentário: {f.comment}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    case "unknown_question_type":
+      return (
+        <div className="form-answer-row">
+          {qTitle}
+          <div className="form-answer-a">
+            <p className="muted" style={{ margin: 0 }}>{block.note}</p>
+          </div>
+        </div>
+      );
+    default: {
+      const _exhaust: never = block;
+      return _exhaust;
+    }
+  }
+}
 
 function RankList({ rows, max }: { rows: { taskId?: string; label: string; count: number }[]; max: number }) {
   if (!rows.length) return <p className="muted">Sem dados.</p>;

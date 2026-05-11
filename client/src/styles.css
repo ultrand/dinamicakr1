@@ -1854,3 +1854,81 @@ td input:focus, td select:focus {
   .bank, .crit-bank { grid-template-columns: repeat(2, 1fr); }
   .flow-layout { grid-template-columns: 1fr; }
 }
+
+/* ══════════════════════════════════════════════════════════
+   Análise — respostas por envio (estilo formulário)
+   ══════════════════════════════════════════════════════════ */
+.response-forms-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+}
+.response-forms-card.panel {
+  padding: 0;
+  overflow: hidden;
+}
+.response-forms-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-sm) var(--gap-md);
+  padding: var(--gap-md) var(--gap-lg);
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.response-forms-summary::-webkit-details-marker { display: none; }
+.response-forms-summary::marker { content: ""; }
+.response-forms-summary-title { font-size: var(--fs-md); }
+.response-forms-id {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--ink-2);
+  margin-left: auto;
+}
+.response-forms-body {
+  padding-top: var(--gap-md);
+}
+.form-answer-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 260px) 1fr;
+  gap: var(--gap-md) var(--gap-lg);
+  padding: var(--gap-md) 0;
+  border-bottom: 1px solid var(--border-l);
+}
+.form-answer-row:last-child { border-bottom: none; }
+.form-answer-help {
+  font-size: var(--fs-xs);
+  margin: var(--gap-xs) 0 0;
+  line-height: 1.4;
+}
+.form-answer-list {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+.form-answer-ol { padding-left: 1.35rem; }
+.form-answer-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+.form-answer-text-sub {
+  margin-top: var(--gap-sm);
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+}
+.form-answer-flow {
+  padding: var(--gap-md);
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+}
+@media (max-width: 768px) {
+  .form-answer-row {
+    grid-template-columns: 1fr;
+  }
+  .response-forms-id { margin-left: 0; width: 100%; }
+}

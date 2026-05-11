@@ -4,6 +4,7 @@ import { adminAuth } from "../middleware/adminAuth.js";
 import { ensureDraft, getDraftVersion, getOrCreateStudy, publishDraft } from "../services/studyService.js";
 import { taskHasResponses } from "../services/taskUsage.js";
 import { buildAnalytics } from "../services/analyticsService.js";
+import { buildResponsesDetail } from "../services/responseDetailService.js";
 
 export const adminRouter = Router();
 adminRouter.use(adminAuth);
@@ -403,6 +404,26 @@ adminRouter.get("/analytics", async (req, res) => {
     }
     const data = await buildAnalytics(versionId, criticalTaskId ?? null);
     res.json(data);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro" });
+  }
+});
+
+adminRouter.get("/responses-detail", async (req, res) => {
+  try {
+    const versionId = typeof req.query.versionId === "string" ? req.query.versionId : undefined;
+    if (!versionId) {
+      res.status(400).json({ error: "versionId obrigatório" });
+      return;
+    }
+    const version = await ensurePublishedVersion(versionId);
+    if (!version) {
+      res.status(404).json({ error: "Versão publicada inválida" });
+      return;
+    }
+    const payload = await buildResponsesDetail(versionId);
+    res.json(payload);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Erro" });
