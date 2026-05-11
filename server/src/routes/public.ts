@@ -83,6 +83,10 @@ publicRouter.post("/responses", async (req, res) => {
       answers: AnswerIn[];
       participantName?: string;
     };
+    /** Ordem completa do passo 2 (wizard). Sempre enviada pelo client atual; usada se não houver pergunta `critical_rank` nas respostas. */
+    const rawStep2 = (req.body as { orderedCriticalTaskIds?: unknown }).orderedCriticalTaskIds;
+    const implicitStep2Order: string[] | undefined =
+      Array.isArray(rawStep2) && rawStep2.every((x) => typeof x === "string") ? (rawStep2 as string[]) : undefined;
     const participantName = typeof req.body?.participantName === "string"
       ? req.body.participantName.trim().slice(0, 120)
       : "";
@@ -185,10 +189,27 @@ publicRouter.post("/responses", async (req, res) => {
       return;
     }
 
-    // Deriva top5 a partir do ranking (critical_rank), ou fallback para selected
+    if (implicitStep2Order?.length) {
+      if (hasDuplicates(implicitStep2Order)) {
+        res.status(400).json({ error: "Ordem do passo 2 contém cards duplicados" });
+        return;
+      }
+      for (const tid of implicitStep2Order) {
+        if (!taskIds.has(tid)) {
+          res.status(400).json({ error: "Ordem do passo 2: card inválido" });
+          return;
+        }
+        if (selectedSet.size > 0 && !selectedSet.has(tid)) {
+          res.status(400).json({ error: "Ordem do passo 2: use apenas tarefas críticas selecionadas" });
+          return;
+        }
+      }
+    }
+
+    // Deriva top5 a partir do ranking (critical_rank), ordem implícita do passo 2 no body, ou seleção
     const rankQ = questions.find((q) => q.type === "critical_rank");
     const rankAns = answers.find((x) => x.questionId === rankQ?.id);
-    const orderedIds = rankAns?.orderedCriticalTaskIds ?? selected;
+    const orderedIds = rankAns?.orderedCriticalTaskIds ?? implicitStep2Order ?? selected;
     if (hasDuplicates(orderedIds)) {
       res.status(400).json({ error: "Ranking contém cards duplicados" });
       return;
@@ -298,6 +319,65 @@ publicRouter.post("/responses", async (req, res) => {
                 },
               });
             }
+          }
+        }
+      }
+
+      /**
+       * CriticalRank: (1) já criado pela pergunta critical_rank nas answers; senão
+       * (2) ordem completa do passo 2 em `orderedCriticalTaskIds` no body; senão
+       * (3) ordem aproximada pelos fluxos (criticalTaskId dos paths, ordem de criação id asc) + seleções restantes.
+       */
+      let nRanks = await tx.criticalRank.count({ where: { responseId: r.id } });
+      if (nRanks === 0 && implicitStep2Order?.length) {
+        const selRows = await tx.criticalSelection.findMany({
+          where: { responseId: r.id },
+          select: { taskId: true },
+        });
+        const selSet = new Set(selRows.map((s) => s.taskId));
+        const normalized: string[] = [];
+        const seen = new Set<string>();
+        for (const tid of implicitStep2Order) {
+          if (!taskIds.has(tid) || !selSet.has(tid) || seen.has(tid)) continue;
+          seen.add(tid);
+          normalized.push(tid);
+        }
+        for (const tid of selSet) {
+          if (!seen.has(tid)) normalized.push(tid);
+        }
+        for (let i = 0; i < normalized.length; i++) {
+          await tx.criticalRank.create({
+            data: { responseId: r.id, taskId: normalized[i]!, position: i + 1 },
+          });
+        }
+        nRanks = normalized.length;
+      }
+      if (nRanks === 0) {
+        const paths = await tx.path.findMany({
+          where: { responseId: r.id },
+          orderBy: { id: "asc" },
+          select: { criticalTaskId: true },
+        });
+        if (paths.length > 0) {
+          const selRows = await tx.criticalSelection.findMany({
+            where: { responseId: r.id },
+            select: { taskId: true },
+          });
+          const selSet = new Set(selRows.map((s) => s.taskId));
+          const order: string[] = [];
+          const seen = new Set<string>();
+          for (const p of paths) {
+            if (!selSet.has(p.criticalTaskId) || seen.has(p.criticalTaskId)) continue;
+            seen.add(p.criticalTaskId);
+            order.push(p.criticalTaskId);
+          }
+          for (const tid of selSet) {
+            if (!seen.has(tid)) order.push(tid);
+          }
+          for (let i = 0; i < order.length; i++) {
+            await tx.criticalRank.create({
+              data: { responseId: r.id, taskId: order[i]!, position: i + 1 },
+            });
           }
         }
       }

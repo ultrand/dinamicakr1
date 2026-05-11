@@ -952,6 +952,8 @@ export function ParticipantPage() {
       await apiSend("/api/public/responses", "POST", {
         studyVersionId: version.id,
         answers,
+        /** Sempre envia a ordem do passo 2 — o servidor grava em CriticalRank mesmo sem pergunta critical_rank. */
+        orderedCriticalTaskIds: state.orderedSelected,
         participantName: participantName.trim(),
       });
       setDone(true);
