@@ -1909,6 +1909,50 @@ td input:focus, td select:focus {
   padding-left: 1.15rem;
 }
 .form-answer-ol { padding-left: 1.35rem; }
+.form-answer-ol-plain {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 0;
+}
+.form-answer-ol-plain li { margin-bottom: var(--gap-xs); }
+/* Por resposta — passo 1 com ordem do passo 2: números no markup (não depende de <ol> / list-style, imune a resets). */
+.form-answer-critical-priority-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-xs);
+  margin: 0;
+}
+.form-answer-critical-priority-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.form-answer-critical-priority-num {
+  flex: 0 0 1.85rem;
+  min-width: 1.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  text-align: right;
+}
+.form-answer-critical-priority-label {
+  flex: 1;
+  min-width: 0;
+}
+.form-answer-order-note {
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+  margin: 0 0 var(--gap-sm);
+}
+.analytics-path-crit-cell {
+  max-width: 14rem;
+  min-width: 8rem;
+  word-break: break-word;
+  white-space: normal;
+  vertical-align: top;
+  font-size: var(--fs-xs);
+}
 .form-answer-text {
   white-space: pre-wrap;
   word-break: break-word;

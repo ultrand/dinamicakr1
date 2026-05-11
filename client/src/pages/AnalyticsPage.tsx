@@ -22,7 +22,8 @@ type ResponseDetailBlock =
       type: "critical_select";
       title: string;
       helpText: string;
-      tasks: { id: string; label: string }[];
+      tasks: { id: string; label: string; order: number }[];
+      selectionOrderSource: "passo2" | "alfabetica_sem_ranking";
     }
   | {
       questionId: string;
@@ -91,6 +92,8 @@ type Analytics = {
   flowCoverageTop5: FlowCov[];
   /** ranking = posições 1–5 do passo "ordenar"; selecao = fallback pelas mais marcadas na seleção */
   flowCoverageBasis: "ranking" | "selecao" | "none";
+  /** true = lista ordenada por posição média no ranking (consenso); false = só por vezes selecionada */
+  criticalSelectionOrderedByRank?: boolean;
   whyKeywordsTop: Keyword[];
   longTextKeywordsTop: Keyword[];
   responses: ResponseIdentity[];
@@ -142,6 +145,7 @@ export function AnalyticsPage() {
     lines.push(["meta", "critical_filter", critFilter || "todas"].map(csvCell).join(","));
     lines.push(["meta", "responses_count", data.responses.length].map(csvCell).join(","));
     lines.push(["meta", "flow_coverage_basis", data.flowCoverageBasis ?? "none"].map(csvCell).join(","));
+    lines.push(["meta", "critical_list_ordered_by_avg_rank", String(!!data.criticalSelectionOrderedByRank)].map(csvCell).join(","));
 
     const pushRank = (metric: string, rows: { label: string; count: number }[]) => {
       rows.forEach((r, i) => lines.push(["ranking", metric, i + 1, r.label, r.count].map(csvCell).join(",")));
@@ -372,7 +376,15 @@ export function AnalyticsPage() {
                   <div className="panel-hd">Críticas mais selecionadas</div>
                   <div className="panel-body">
                     <p className="analytics-lede muted" style={{ marginTop: 0 }}>
-                      Quantas vezes cada card foi marcado como <strong>crítico</strong> no passo de seleção (uma pessoa pode marcar vários).
+                      {data.criticalSelectionOrderedByRank ? (
+                        <>
+                          Ordem <strong>1, 2, 3…</strong> = <strong>posição média no ranking</strong> entre as respostas (1 = mais prioritária no consenso). O número à direita continua sendo <strong>quantas vezes</strong> foi marcada como crítica na seleção.
+                        </>
+                      ) : (
+                        <>
+                          Ordenado por <strong>quantas vezes</strong> cada card foi marcado como crítico (ainda sem ranking gravado para ordenar de outro modo).
+                        </>
+                      )}
                     </p>
                     <RankList rows={data.criticalRanking} max={maxRank(data.criticalRanking)} />
                   </div>
@@ -507,10 +519,13 @@ export function AnalyticsPage() {
                         <tbody>
                           {data.commonPathByCritical.map((c) => (
                             <tr key={c.criticalTaskId}>
-                              <td style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <td
+                                className="analytics-path-crit-cell"
+                                title={c.criticalLabel}
+                              >
                                 {c.criticalLabel}
                               </td>
-                              <td style={{ fontSize: "var(--fs-xs)", color: "var(--ink-2)" }}>
+                              <td style={{ fontSize: "var(--fs-xs)", color: "var(--ink-2)", wordBreak: "break-word" }}>
                                 {c.sequenceLabel.join(" → ") || "—"}
                               </td>
                               <td>{c.frequency}</td>
@@ -610,7 +625,8 @@ function AnalyticsReadingGuide({
 
         <h3 className="analytics-help-h">Por resposta</h3>
         <ul className="analytics-help-ul">
-          <li><strong>Cada envio completo</strong>, pergunta a pergunta, como em relatório de formulário.</li>
+          <li><strong>Cada envio completo</strong>, pergunta a pergunta.</li>
+          <li>Na lista de <strong>críticas marcadas</strong>, os números seguem o <strong>passo 2</strong> quando o ranking foi gravado; senão, ordem alfabética (avisado no texto).</li>
         </ul>
       </div>
     </details>
@@ -729,7 +745,8 @@ function FormAnswerBlock({ block }: { block: ResponseDetailBlock }) {
   );
 
   switch (block.type) {
-    case "critical_select":
+    case "critical_select": {
+      const byPasso2 = block.selectionOrderSource === "passo2";
       return (
         <div className="form-answer-row">
           {qTitle}
@@ -737,15 +754,34 @@ function FormAnswerBlock({ block }: { block: ResponseDetailBlock }) {
             {!block.tasks.length ? (
               <span className="muted">—</span>
             ) : (
-              <ul className="form-answer-list">
-                {block.tasks.map((t) => (
-                  <li key={t.id}>{t.label}</li>
-                ))}
-              </ul>
+              <>
+                <p className="muted form-answer-order-note">
+                  {byPasso2 ? (
+                    <>
+                      <strong>{block.tasks.length}</strong> críticas — números = <strong>ordem do passo 2</strong> (mais urgente primeiro) nesta resposta.
+                    </>
+                  ) : (
+                    <>
+                      <strong>{block.tasks.length}</strong> críticas — <strong>sem ranking salvo</strong> no banco para esta versão; números = ordem <strong>alfabética</strong> só para leitura (não é prioridade real).
+                    </>
+                  )}
+                </p>
+                <div className="form-answer-critical-priority-list" role="list">
+                  {block.tasks.map((t, i) => (
+                    <div key={t.id} className="form-answer-critical-priority-row" role="listitem">
+                      <span className="form-answer-critical-priority-num" aria-hidden>
+                        {i + 1}.
+                      </span>
+                      <span className="form-answer-critical-priority-label">{t.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>
       );
+    }
     case "critical_rank":
       return (
         <div className="form-answer-row">
@@ -913,6 +949,9 @@ function FlowCoveragePanel({
           Base: tarefas que mais apareceram nas <strong>posições 1 a 5</strong> do passo de ordenação.
         </p>
       )}
+      <p className="muted" style={{ fontSize: "var(--fs-xs)", margin: 0 }}>
+        <strong>✓</strong> fluxo com passos preenchidos · <strong>→</strong> participante não chegou a montar fluxo para essa crítica · <strong>✗</strong> fluxo existente mas sem nenhum passo · barra = % com fluxo preenchido
+      </p>
       {rows.map((r) => (
         <div key={r.criticalTaskId} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 4 }}>
           <span style={{ fontSize: "var(--fs-xs)", fontWeight: 600, gridColumn: "1/-1" }}>{r.label}</span>
