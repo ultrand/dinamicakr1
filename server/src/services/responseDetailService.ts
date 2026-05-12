@@ -4,13 +4,54 @@ function taskLabel(t: { verb: string; textoPrincipal: string }) {
   return `${(t.verb ?? "").toUpperCase()} ${t.textoPrincipal}`.trim();
 }
 
+/** Ordem exibida na seleção: igual ao passo 2 quando há CriticalRank; senão alfabética estável. */
+function buildOrderedCriticalSelections(
+  selections: { taskId: string }[],
+  ranks: { taskId: string; position: number }[],
+  tidToLabel: (id: string) => string,
+): {
+  tasks: { id: string; label: string; order: number }[];
+  selectionOrderSource: "passo2" | "alfabetica_sem_ranking";
+} {
+  const selUnique: string[] = [];
+  const seen = new Set<string>();
+  for (const s of selections) {
+    if (!seen.has(s.taskId)) {
+      seen.add(s.taskId);
+      selUnique.push(s.taskId);
+    }
+  }
+
+  const rankForSelected = ranks
+    .filter((row) => seen.has(row.taskId))
+    .sort((a, b) => a.position - b.position);
+  const inRankOrder = rankForSelected.map((r) => r.taskId);
+  const inRankSet = new Set(inRankOrder);
+  const notInRank = selUnique.filter((id) => !inRankSet.has(id));
+
+  const usePasso2 = inRankOrder.length > 0;
+  const merged = usePasso2
+    ? [...inRankOrder, ...notInRank]
+    : [...selUnique].sort((a, b) => tidToLabel(a).localeCompare(tidToLabel(b), "pt"));
+
+  return {
+    tasks: merged.map((id, i) => ({
+      id,
+      label: tidToLabel(id),
+      order: i + 1,
+    })),
+    selectionOrderSource: usePasso2 ? "passo2" : "alfabetica_sem_ranking",
+  };
+}
+
 export type ResponseDetailBlock =
   | {
       questionId: string;
       type: "critical_select";
       title: string;
       helpText: string;
-      tasks: { id: string; label: string }[];
+      tasks: { id: string; label: string; order: number }[];
+      selectionOrderSource: "passo2" | "alfabetica_sem_ranking";
     }
   | {
       questionId: string;
@@ -100,16 +141,18 @@ export async function buildResponsesDetail(studyVersionId: string) {
       const helpText = q.helpText ?? "";
 
       if (q.type === "critical_select") {
-        const tasksSel = r.criticalSelections.map((s) => ({
-          id: s.taskId,
-          label: tidToLabel(s.taskId),
-        }));
+        const { tasks: tasksSel, selectionOrderSource } = buildOrderedCriticalSelections(
+          r.criticalSelections,
+          r.criticalRanks,
+          tidToLabel,
+        );
         blocks.push({
           questionId: q.id,
           type: "critical_select",
           title,
           helpText,
           tasks: tasksSel,
+          selectionOrderSource,
         });
         continue;
       }

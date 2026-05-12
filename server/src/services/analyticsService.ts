@@ -7,6 +7,14 @@ function stddev(values: number[]): number {
   return Math.round(Math.sqrt(variance) * 100) / 100;
 }
 
+function median(values: number[]): number {
+  if (!values.length) return 0;
+  const s = [...values].sort((a, b) => a - b);
+  const n = s.length;
+  const mid = Math.floor(n / 2);
+  return n % 2 === 1 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
+}
+
 function topTerms(texts: string[], n = 15): { term: string; count: number }[] {
   const STOP = new Set([
     "de","a","o","e","em","na","no","do","da","que","para","com","um","uma","os","as",
@@ -31,6 +39,14 @@ export async function buildAnalytics(studyVersionId: string, filterCriticalTaskI
     select: { id: true, createdAt: true, participantName: true },
     orderBy: { createdAt: "asc" },
   });
+
+  const selectionCountPerResponse = await prisma.response.findMany({
+    where: { studyVersionId },
+    select: { _count: { select: { criticalSelections: true } } },
+  });
+  const medianCriticalSelections = median(
+    selectionCountPerResponse.map((r) => r._count.criticalSelections),
+  );
 
   const tasks = await prisma.task.findMany({
     where: { studyVersionId },
@@ -242,6 +258,8 @@ export async function buildAnalytics(studyVersionId: string, filterCriticalTaskI
   })();
 
   return {
+    /** Mediana do número de críticas marcadas por envio (passo 1). Usada no cliente para N do “ouro pesquisa”. */
+    medianCriticalSelections,
     // existentes
     criticalRanking,
     bottleneckRanking: toRank(bottleneck),

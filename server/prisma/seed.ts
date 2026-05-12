@@ -103,6 +103,13 @@ async function main() {
       },
       {
         sortOrder: 1,
+        type: "critical_rank",
+        title: "Ordem de prioridade",
+        helpText: "Ordene as críticas do mais prioritário ao menos prioritário (igual ao passo 2 do participante).",
+        required: true,
+      },
+      {
+        sortOrder: 2,
         type: "hardest_critical",
         title: "Mais difícil entre as críticas",
         helpText:
@@ -110,7 +117,7 @@ async function main() {
         required: true,
       },
       {
-        sortOrder: 2,
+        sortOrder: 3,
         type: "text_long",
         title: "Dificuldades conceituais",
         helpText:
@@ -118,7 +125,7 @@ async function main() {
         required: true,
       },
       {
-        sortOrder: 3,
+        sortOrder: 4,
         type: "flow_builder_per_critical",
         title: "Fluxos por tarefa crítica",
         helpText:

@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import { PadraoOuroSection } from "../components/PadraoOuroSection";
 import { apiGet } from "../api";
 import { ciapMotion } from "../ciap-motion";
+import { EXPERT_GOLD_CARDS } from "../data/expertGold";
+import {
+  computePadraoOuroResearch,
+  DEFAULT_GOLD_WEIGHTS,
+  diffExpertVsResearch,
+  matchExpertCardsToTasks,
+  normalizeWeights,
+  type GoldWeights,
+  type PadraoOuroAnalyticsInput,
+} from "../lib/padraoOuroCalc";
 
 const LS = "dinamica_admin_token";
 
@@ -78,12 +89,16 @@ type ResponsesDetailPayload = {
   }[];
 };
 
+type GraphNode = { id: string; verb: string; textoPrincipal: string; etapa: string; atividade: string };
+
 type Analytics = {
+  /** Mediana de críticas marcadas por envio (passo 1) — usada no Padrão Ouro pesquisa. */
+  medianCriticalSelections?: number;
   criticalRanking: Rank[];
   bottleneckRanking: Rank[];
   step1Ranking: Rank[];
   commonPathByCritical: Common[];
-  graph: { edges: Edge[] };
+  graph: { edges: Edge[]; nodes?: GraphNode[] };
   // novos
   top5Ranking: Rank[];
   avgRankPosition: RankPos[];
@@ -130,7 +145,8 @@ export function AnalyticsPage() {
   const [err,          setErr]          = useState<string | null>(null);
   const [loadingVersions, setLoadingVersions] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
-  const [section,      setSection]      = useState<"ranking" | "fluxos" | "grafo" | "respostas">("ranking");
+  const [section,      setSection]      = useState<"ranking" | "fluxos" | "grafo" | "respostas" | "padraoOuro">("ranking");
+  const [goldWeights, setGoldWeights] = useState<GoldWeights>(() => ({ ...DEFAULT_GOLD_WEIGHTS }));
   const [responseDetail, setResponseDetail] = useState<ResponsesDetailPayload | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailErr, setDetailErr] = useState<string | null>(null);
@@ -146,6 +162,9 @@ export function AnalyticsPage() {
     lines.push(["meta", "version_number", version ? `v${version.number}` : "desconhecida"].map(csvCell).join(","));
     lines.push(["meta", "critical_filter", critFilter || "todas"].map(csvCell).join(","));
     lines.push(["meta", "responses_count", data.responses.length].map(csvCell).join(","));
+    if (data.medianCriticalSelections != null) {
+      lines.push(["meta", "median_critical_selections", String(data.medianCriticalSelections)].map(csvCell).join(","));
+    }
     lines.push(["meta", "flow_coverage_basis", data.flowCoverageBasis ?? "none"].map(csvCell).join(","));
     lines.push(["meta", "critical_list_ordered_by_avg_rank", String(!!data.criticalSelectionOrderedByRank)].map(csvCell).join(","));
     if (data.flowPathStats) {
@@ -191,6 +210,76 @@ export function AnalyticsPage() {
     );
     data.graph.edges.forEach((e) =>
       lines.push(["graph", "edge", "transition", `${e.fromLabel} -> ${e.toLabel}`, e.weight, e.from, e.to].map(csvCell).join(",")),
+    );
+
+    const gw = normalizeWeights(goldWeights);
+    lines.push(
+      ["gold", "meta", "weights_input", goldWeights.criticality, goldWeights.consensus, goldWeights.recurrence]
+        .map(csvCell)
+        .join(","),
+    );
+    lines.push(
+      ["gold", "meta", "weights_normalized", gw.criticality, gw.consensus, gw.recurrence].map(csvCell).join(","),
+    );
+    const goldIn = data as unknown as PadraoOuroAnalyticsInput;
+    const gPack = computePadraoOuroResearch(goldIn, goldWeights);
+    lines.push(
+      [
+        "gold",
+        "meta",
+        "weights_effective",
+        gPack.weightsEffective.criticality,
+        gPack.weightsEffective.consensus,
+        gPack.weightsEffective.recurrence,
+      ]
+        .map(csvCell)
+        .join(","),
+    );
+    lines.push(["gold", "meta", "n", gPack.n, gPack.nFormula].map(csvCell).join(","));
+    const em = matchExpertCardsToTasks(EXPERT_GOLD_CARDS, data.graph.nodes);
+    em.forEach((m, i) =>
+      lines.push(
+        ["gold", "expert", String(i + 1), m.taskId ?? "", m.label ?? "", m.card.etapa, m.card.rationale]
+          .map(csvCell)
+          .join(","),
+      ),
+    );
+    gPack.fusedTop.forEach((r, i) =>
+      lines.push(
+        [
+          "gold",
+          "research_fused",
+          String(i + 1),
+          r.taskId,
+          r.label,
+          r.fusedScore.toFixed(4),
+          r.zCriticality.toFixed(4),
+          r.zConsensus.toFixed(4),
+          r.zRecurrence.toFixed(4),
+        ]
+          .map(csvCell)
+          .join(","),
+      ),
+    );
+    const diffR = diffExpertVsResearch(
+      em.map((x) => x.taskId),
+      gPack.fusedTop,
+    );
+    diffR.forEach((d, i) =>
+      lines.push(
+        [
+          "gold",
+          "diff",
+          String(i + 1),
+          d.taskId ?? "",
+          d.label,
+          d.expertPos ?? "",
+          d.researchPos ?? "",
+          d.status,
+        ]
+          .map(csvCell)
+          .join(","),
+      ),
     );
 
     const filename = `analytics-v${version?.number ?? "x"}-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -308,11 +397,25 @@ export function AnalyticsPage() {
         {err && <span className="error">{err}</span>}
       </div>
 
+      {critFilter && section !== "respostas" && (
+        <CriticalFilterNotice
+          label={critChoices.find((c) => c.id === critFilter)?.label ?? "crítica selecionada"}
+        />
+      )}
+
       {/* sub-nav */}
       <div className="tabs" style={{ marginBottom: 12 }}>
-        {(["ranking","fluxos","grafo","respostas"] as const).map((s) => (
+        {(["ranking", "fluxos", "grafo", "respostas", "padraoOuro"] as const).map((s) => (
           <button key={s} type="button" className={`tab${section === s ? " active" : ""}`} onClick={() => setSection(s)}>
-            {s === "ranking" ? "Ranking & Seleção" : s === "fluxos" ? "Fluxos" : s === "grafo" ? "Grafo" : "Por resposta"}
+            {s === "ranking"
+              ? "Ranking & Seleção"
+              : s === "fluxos"
+                ? "Fluxos"
+                : s === "grafo"
+                  ? "Grafo"
+                  : s === "respostas"
+                    ? "Por resposta"
+                    : "Padrão ouro"}
           </button>
         ))}
       </div>
@@ -341,6 +444,14 @@ export function AnalyticsPage() {
         <p className="muted">Carregando análise…</p>
       ) : data ? (
         <>
+          {section === "padraoOuro" && (
+            <PadraoOuroSection
+              data={data as unknown as PadraoOuroAnalyticsInput}
+              weights={goldWeights}
+              onWeightsChange={setGoldWeights}
+              onResetWeights={() => setGoldWeights({ ...DEFAULT_GOLD_WEIGHTS })}
+            />
+          )}
           {section === "ranking" && (
             <div className="stack-s">
               <p className="analytics-lede muted" style={{ margin: "0 0 4px" }}>
@@ -622,12 +733,43 @@ export function AnalyticsPage() {
   );
 }
 
+/* ── Aviso filtro por crítica (leitura dos resultados) ─────────────────── */
+
+function CriticalFilterNotice({ label }: { label: string }) {
+  return (
+    <div className="analytics-inline-note" role="note" style={{ marginBottom: 12 }}>
+      <p style={{ margin: 0, fontWeight: 600 }}>
+        Filtro por crítica ativo — recorte para: <span style={{ fontWeight: 700 }}>{label}</span>
+      </p>
+      <p style={{ margin: "8px 0 0", fontSize: "var(--fs-sm)", lineHeight: 1.5 }}>
+        Neste modo, o painel <strong>mistura dois tipos de resultado</strong>. Vale a pena ler com calma para não comparar “maçã com laranja”:
+      </p>
+      <ul style={{ margin: "8px 0 0", paddingLeft: "1.25rem", fontSize: "var(--fs-sm)", lineHeight: 1.5 }}>
+        <li>
+          <strong>Panorama da versão inteira (todas as respostas):</strong> lista de envios, críticas mais
+          marcadas, ranking, “mais difícil”, palavras-chave nos textos, e o <strong>N</strong> do Padrão ouro
+          (mediana de quantas críticas cada pessoa marcou).
+        </li>
+        <li>
+          <strong>Só nesta crítica (recorte do fluxo):</strong> fluxos em que ela é o alvo, gargalos e passo 1
+          desse recorte, transições A→B no grafo, e na aba Padrão ouro a parte <strong>pesquisa</strong> que usa
+          fluxo e grafo.
+        </li>
+      </ul>
+      <p style={{ margin: "10px 0 0", marginBottom: 0, fontSize: "var(--fs-sm)", lineHeight: 1.5 }}>
+        Para ver <strong>tudo</strong> no mesmo tipo de conta (visão geral da equipa), escolha <strong>Todas</strong> em
+        “Filtrar por crítica”.
+      </p>
+    </div>
+  );
+}
+
 /* ── Sub-components ─────────────────────────────────────── */
 
 function AnalyticsReadingGuide({
   activeSection,
 }: {
-  activeSection: "ranking" | "fluxos" | "grafo" | "respostas";
+  activeSection: "ranking" | "fluxos" | "grafo" | "respostas" | "padraoOuro";
 }) {
   const tabLabel =
     activeSection === "ranking"
@@ -636,7 +778,9 @@ function AnalyticsReadingGuide({
         ? "Fluxos"
         : activeSection === "grafo"
           ? "Transições (lista A → B)"
-          : "Por resposta";
+          : activeSection === "respostas"
+            ? "Por resposta"
+            : "Padrão ouro";
 
   return (
     <details className="panel analytics-reading-guide">
@@ -644,6 +788,8 @@ function AnalyticsReadingGuide({
       <div className="panel-body">
         <p className="analytics-lede muted" style={{ marginTop: 0 }}>
           Aba aberta agora: <strong>{tabLabel}</strong>. Cada aba também tem um parágrafo curto em cima dos gráficos.
+          Com <strong>Filtrar por crítica</strong> ligado, aparece um <strong>aviso em destaque</strong> entre os filtros e as abas
+          explicando o que continua valendo para a versão inteira e o que vale só para aquela crítica.
         </p>
 
         <h3 className="analytics-help-h">Ranking &amp; Seleção</h3>
@@ -684,6 +830,14 @@ function AnalyticsReadingGuide({
         <ul className="analytics-help-ul">
           <li><strong>Cada envio completo</strong>, pergunta a pergunta.</li>
           <li>Na lista de <strong>críticas marcadas</strong>, os números seguem o <strong>passo 2</strong> quando o ranking foi gravado; senão, ordem alfabética (avisado no texto).</li>
+        </ul>
+
+        <h3 className="analytics-help-h">Padrão ouro</h3>
+        <ul className="analytics-help-ul">
+          <li><strong>Ouro especialista</strong> — lista editorial fixa no código; compara com os cards da versão por verbo + texto.</li>
+          <li><strong>Ouro pesquisa</strong> — três lentes (criticidade, consenso, recorrência), max-norm, z-score, fusão com pesos ajustáveis; N vem da mediana de críticas por envio (entre 6 e 14).</li>
+          <li><strong>Variações</strong> — top N ordenado só por z<sub>A</sub>, só por z<sub>B</sub> ou só por z<sub>C</sub>.</li>
+          <li><strong>Comparativo</strong> — posições no ouro especialista vs ouro pesquisa (inclui só especialista / só pesquisa).</li>
         </ul>
       </div>
     </details>
