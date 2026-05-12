@@ -787,7 +787,12 @@ function AnalyticsReadingGuide({
       <summary>O que significa cada bloco? (guia — pode fechar depois de ler)</summary>
       <div className="panel-body">
         <p className="analytics-lede muted" style={{ marginTop: 0 }}>
-          Aba aberta agora: <strong>{tabLabel}</strong>. Cada aba também tem um parágrafo curto em cima dos gráficos.
+          Aba aberta agora: <strong>{tabLabel}</strong>.
+          {activeSection === "padraoOuro" ? (
+            <> O bloco grande no topo da aba explica tudo em linguagem simples; aqui só resumes o resto do painel.</>
+          ) : (
+            <> Cada aba também tem um parágrafo curto em cima dos gráficos.</>
+          )}{" "}
           Com <strong>Filtrar por crítica</strong> ligado, aparece um <strong>aviso em destaque</strong> entre os filtros e as abas
           explicando o que continua valendo para a versão inteira e o que vale só para aquela crítica.
         </p>
@@ -834,10 +839,18 @@ function AnalyticsReadingGuide({
 
         <h3 className="analytics-help-h">Padrão ouro</h3>
         <ul className="analytics-help-ul">
-          <li><strong>Ouro especialista</strong> — lista editorial fixa no código; compara com os cards da versão por verbo + texto.</li>
-          <li><strong>Ouro pesquisa</strong> — três lentes (criticidade, consenso, recorrência), max-norm, z-score, fusão com pesos ajustáveis; N vem da mediana de críticas por envio (entre 6 e 14).</li>
-          <li><strong>Variações</strong> — top N ordenado só por z<sub>A</sub>, só por z<sub>B</sub> ou só por z<sub>C</sub>.</li>
-          <li><strong>Comparativo</strong> — posições no ouro especialista vs ouro pesquisa (inclui só especialista / só pesquisa).</li>
+          <li>
+            <strong>Em cima</strong> explica-se em linguagem simples o que são as duas listas e o comparativo. Os sliders
+            mudam o peso de “urgência”, “acordo” e “caminhos” na lista automática.
+          </li>
+          <li>
+            <strong>Detalhe técnico</strong> (no fim da aba) traz fórmulas e o cálculo do tamanho N para quem precisa auditar
+            números.
+          </li>
+          <li>
+            Com <strong>Filtrar por crítica</strong> ligado, aparece um aviso entre filtros e abas a dizer o que continua a
+            valer para a versão inteira e o que vale só para aquela crítica.
+          </li>
         </ul>
       </div>
     </details>
