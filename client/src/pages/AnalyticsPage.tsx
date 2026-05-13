@@ -214,12 +214,12 @@ export function AnalyticsPage() {
 
     const gw = normalizeWeights(goldWeights);
     lines.push(
-      ["gold", "meta", "weights_input", goldWeights.criticality, goldWeights.consensus, goldWeights.recurrence]
+      ["gold", "meta", "weights_input", goldWeights.criticality, goldWeights.consensus, goldWeights.frequency, goldWeights.recurrence]
         .map(csvCell)
         .join(","),
     );
     lines.push(
-      ["gold", "meta", "weights_normalized", gw.criticality, gw.consensus, gw.recurrence].map(csvCell).join(","),
+      ["gold", "meta", "weights_normalized", gw.criticality, gw.consensus, gw.frequency, gw.recurrence].map(csvCell).join(","),
     );
     const goldIn = data as unknown as PadraoOuroAnalyticsInput;
     const gPack = computePadraoOuroResearch(goldIn, goldWeights);
@@ -230,6 +230,7 @@ export function AnalyticsPage() {
         "weights_effective",
         gPack.weightsEffective.criticality,
         gPack.weightsEffective.consensus,
+        gPack.weightsEffective.frequency,
         gPack.weightsEffective.recurrence,
       ]
         .map(csvCell)

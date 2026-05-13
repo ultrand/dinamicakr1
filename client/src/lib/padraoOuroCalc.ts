@@ -1,30 +1,34 @@
 import type { ExpertGoldCard } from "../data/expertGold";
 
-/** Entrada padrão dos sliders (0–100 cada); após normalizeWeights somam 1 em proporção 0,5 / 0,3 / 0,2. */
+/** Entrada padrão dos sliders (0–100 cada); normalizeWeights converte para proporção. */
 export const DEFAULT_GOLD_WEIGHTS: GoldWeights = {
-  criticality: 50,
-  consensus: 30,
-  recurrence: 20,
+  criticality: 35,
+  consensus: 25,
+  frequency: 25,
+  recurrence: 15,
 };
 
 export type GoldWeights = {
   criticality: number;
   consensus: number;
+  frequency: number;
   recurrence: number;
 };
 
 /** Evita divisão por zero em 1 / avgPosition. */
 export const EPS_POSITION = 0.25;
-/** Amortecimento em 1 / (σ + SIGMA_EPS) — σ vem do analytics (desvio-padrão das posições no ranking). */
+/** Amortecimento em 1 / (σ + SIGMA_EPS). */
 export const SIGMA_EPS = 0.5;
-/** Pesos internos da lente “criticidade” (somam 1). */
-export const INNER_WEIGHTS_CRITICALITY = { selection: 0.4, rankInverse: 0.35, hardest: 0.25 } as const;
-/** Pesos internos da lente “consenso” (somam 1): σ baixo → maior invSig; fluxo preenchido → maior flowCov. */
+/** Pesos internos da lente "urgência/dor" (somam 1): posição no ranking + votos "mais difícil". */
+export const INNER_WEIGHTS_CRITICALITY = { rankInverse: 0.6, hardest: 0.4 } as const;
+/** Pesos internos da lente "acordo" (somam 1): σ baixo → invSig; fluxo preenchido → flowCov. */
 export const INNER_WEIGHTS_CONSENSUS = { inverseSigma: 0.65, flowCoverage: 0.35 } as const;
-/** Pesos internos da lente “recorrência” (somam 1): degraus, início de cadeia, grau no grafo agregado. */
+/** Pesos internos da lente "frequência de aparição" (somam 1): seleção como crítica + top-5 no ranking. */
+export const INNER_WEIGHTS_FREQUENCY = { selection: 0.5, top5: 0.5 } as const;
+/** Pesos internos da lente "caminhos" (somam 1): gargalos, início de cadeia, grau no grafo. */
 export const INNER_WEIGHTS_RECURRENCE = { bottleneck: 0.4, step1: 0.35, edgeDegree: 0.25 } as const;
 
-/** Piso e teto do tamanho N do ouro pesquisa-derivado (após arredondar a mediana de críticas por envio). */
+/** Piso e teto do tamanho N do ouro pesquisa-derivado. */
 export const N_FLOOR = 6;
 export const N_CEIL = 14;
 
@@ -38,6 +42,7 @@ export type GraphNode = {
 
 export type PadraoOuroAnalyticsInput = {
   criticalRanking: { taskId: string; count: number; label: string }[];
+  top5Ranking: { taskId: string; count: number; label: string }[];
   avgRankPosition: { taskId: string; avgPosition: number; count: number; label: string }[];
   disagreementIndex: { taskId: string; disagreement: number; count: number; label: string }[];
   hardestCounts: { taskId: string; count: number; label: string }[];
@@ -51,19 +56,18 @@ export type PadraoOuroAnalyticsInput = {
 export type GoldTaskBreakdown = {
   taskId: string;
   label: string;
-  /** Lente A — antes do z-score */
   rawCriticality: number;
-  /** Lente B — antes do z-score */
   rawConsensus: number;
-  /** Lente C — antes do z-score */
+  rawFrequency: number;
   rawRecurrence: number;
   zCriticality: number;
   zConsensus: number;
+  zFrequency: number;
   zRecurrence: number;
-  /** Pontuação final = w̃c·zA + w̃s·zB + w̃r·zC (w̃ = pesos efetivos após lentes sem variância). */
   fusedScore: number;
   components: {
     selCount: number;
+    top5Count: number;
     avgPosition: number | null;
     rankInverse: number;
     hardestCount: number;
@@ -81,21 +85,22 @@ export type GoldResearchPack = {
   nFormula: string;
   weightsInput: GoldWeights;
   weightsNormalized: GoldWeights;
-  /** Pesos efetivos após zerar lentes sem variância (ex.: sem ranking, zA=zB=0). */
   weightsEffective: GoldWeights;
   hasRanking: boolean;
   fusedTop: GoldTaskBreakdown[];
   variantCriticality: GoldTaskBreakdown[];
   variantConsensus: GoldTaskBreakdown[];
+  variantFrequency: GoldTaskBreakdown[];
   variantRecurrence: GoldTaskBreakdown[];
 };
 
 export function normalizeWeights(w: GoldWeights): GoldWeights {
-  const sum = w.criticality + w.consensus + w.recurrence;
-  if (sum <= 0) return { criticality: 0.5, consensus: 0.3, recurrence: 0.2 };
+  const sum = w.criticality + w.consensus + w.frequency + w.recurrence;
+  if (sum <= 0) return { criticality: 0.35, consensus: 0.25, frequency: 0.25, recurrence: 0.15 };
   return {
     criticality: w.criticality / sum,
     consensus: w.consensus / sum,
+    frequency: w.frequency / sum,
     recurrence: w.recurrence / sum,
   };
 }
@@ -104,15 +109,13 @@ function meanStd(values: number[]): { mean: number; std: number } {
   if (!values.length) return { mean: 0, std: 0 };
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
   const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
-  const std = Math.sqrt(variance);
-  return { mean, std };
+  return { mean, std: Math.sqrt(variance) };
 }
 
 function zScores(values: number[]): number[] {
   const { mean, std } = meanStd(values);
-  const s = std < 1e-9 ? 0 : std;
-  if (s === 0) return values.map(() => 0);
-  return values.map((v) => (v - mean) / s);
+  if (std < 1e-9) return values.map(() => 0);
+  return values.map((v) => (v - mean) / std);
 }
 
 function maxNormScalar(values: number[]): number[] {
@@ -123,6 +126,7 @@ function maxNormScalar(values: number[]): number[] {
 function labelFor(id: string, data: PadraoOuroAnalyticsInput): string {
   const a =
     data.criticalRanking.find((r) => r.taskId === id) ??
+    data.top5Ranking.find((r) => r.taskId === id) ??
     data.avgRankPosition.find((r) => r.taskId === id) ??
     data.disagreementIndex.find((r) => r.taskId === id) ??
     data.hardestCounts.find((r) => r.taskId === id) ??
@@ -138,6 +142,7 @@ function labelFor(id: string, data: PadraoOuroAnalyticsInput): string {
 function unionTaskIds(data: PadraoOuroAnalyticsInput): string[] {
   const s = new Set<string>();
   for (const r of data.criticalRanking) s.add(r.taskId);
+  for (const r of data.top5Ranking) s.add(r.taskId);
   for (const r of data.avgRankPosition) s.add(r.taskId);
   for (const r of data.disagreementIndex) s.add(r.taskId);
   for (const r of data.hardestCounts) s.add(r.taskId);
@@ -168,27 +173,24 @@ function computeN(medianCritical: number | undefined): { n: number; nFormula: st
   return { n, nFormula };
 }
 
-/**
- * Pesos efetivos: se uma lente tiver variância zero (todos os z iguais), o peso dela
- * é redistribuído na mesma proporção entre as lentes ainda “ativas”.
- */
 function effectiveWeightsAfterZeroVariance(
   w: GoldWeights,
-  active: { c: boolean; s: boolean; r: boolean },
+  active: { c: boolean; s: boolean; f: boolean; r: boolean },
 ): GoldWeights {
   let c = active.c ? w.criticality : 0;
   let s = active.s ? w.consensus : 0;
+  let f = active.f ? w.frequency : 0;
   let r = active.r ? w.recurrence : 0;
-  const sum = c + s + r;
-  if (sum <= 0) return { criticality: 1 / 3, consensus: 1 / 3, recurrence: 1 / 3 };
-  return { criticality: c / sum, consensus: s / sum, recurrence: r / sum };
+  const sum = c + s + f + r;
+  if (sum <= 0) return { criticality: 0.25, consensus: 0.25, frequency: 0.25, recurrence: 0.25 };
+  return { criticality: c / sum, consensus: s / sum, frequency: f / sum, recurrence: r / sum };
 }
 
-function buildRows(
-  ids: string[],
-  data: PadraoOuroAnalyticsInput,
-): Omit<GoldTaskBreakdown, "zCriticality" | "zConsensus" | "zRecurrence" | "fusedScore">[] {
+type RawRow = Omit<GoldTaskBreakdown, "zCriticality" | "zConsensus" | "zFrequency" | "zRecurrence" | "fusedScore">;
+
+function buildRows(ids: string[], data: PadraoOuroAnalyticsInput): RawRow[] {
   const sel = Object.fromEntries(data.criticalRanking.map((x) => [x.taskId, x.count]));
+  const t5 = Object.fromEntries(data.top5Ranking.map((x) => [x.taskId, x.count]));
   const avgP = Object.fromEntries(data.avgRankPosition.map((x) => [x.taskId, x.avgPosition]));
   const sigma = Object.fromEntries(data.disagreementIndex.map((x) => [x.taskId, x.disagreement]));
   const hard = Object.fromEntries(data.hardestCounts.map((x) => [x.taskId, x.count]));
@@ -209,6 +211,7 @@ function buildRows(
 
   return ids.map((id) => {
     const selCount = sel[id] ?? 0;
+    const top5Count = t5[id] ?? 0;
     const avg = avgP[id];
     const rankInverse = avg == null ? 0 : 1 / (avg + EPS_POSITION);
     const hardestCount = hard[id] ?? 0;
@@ -216,7 +219,6 @@ function buildRows(
     const invSigma = sig == null ? medianInv : 1 / (sig + SIGMA_EPS);
     const flowCov = flow[id];
     const flowCovFilledPct = flowCov == null ? null : flowCov;
-
     const bottleneck = bot[id] ?? 0;
     const step1 = s1[id] ?? 0;
     const edgeD = deg[id] ?? 0;
@@ -226,9 +228,11 @@ function buildRows(
       label: labelFor(id, data),
       rawCriticality: 0,
       rawConsensus: 0,
+      rawFrequency: 0,
       rawRecurrence: 0,
       components: {
         selCount,
+        top5Count,
         avgPosition: avg ?? null,
         rankInverse,
         hardestCount,
@@ -243,11 +247,9 @@ function buildRows(
   });
 }
 
-function applyLensRaw(rows: Omit<GoldTaskBreakdown, "zCriticality" | "zConsensus" | "zRecurrence" | "fusedScore">[]): GoldTaskBreakdown[] {
-  const selV = rows.map((r) => r.components.selCount);
+function applyLensRaw(rows: RawRow[]): GoldTaskBreakdown[] {
   const rankV = rows.map((r) => r.components.rankInverse);
   const hardV = rows.map((r) => r.components.hardestCount);
-  const nSel = maxNormScalar(selV);
   const nRank = maxNormScalar(rankV);
   const nHard = maxNormScalar(hardV);
 
@@ -255,6 +257,11 @@ function applyLensRaw(rows: Omit<GoldTaskBreakdown, "zCriticality" | "zConsensus
   const flowV = rows.map((r) => (r.components.flowCovFilledPct == null ? 0 : r.components.flowCovFilledPct / 100));
   const nInv = maxNormScalar(invV);
   const nFlow = maxNormScalar(flowV);
+
+  const selV = rows.map((r) => r.components.selCount);
+  const t5V = rows.map((r) => r.components.top5Count);
+  const nSel = maxNormScalar(selV);
+  const nT5 = maxNormScalar(t5V);
 
   const botV = rows.map((r) => r.components.bottleneck);
   const s1V = rows.map((r) => r.components.step1);
@@ -265,11 +272,14 @@ function applyLensRaw(rows: Omit<GoldTaskBreakdown, "zCriticality" | "zConsensus
 
   return rows.map((r, i) => {
     const rawCriticality =
-      INNER_WEIGHTS_CRITICALITY.selection * nSel[i]! +
       INNER_WEIGHTS_CRITICALITY.rankInverse * nRank[i]! +
       INNER_WEIGHTS_CRITICALITY.hardest * nHard[i]!;
     const rawConsensus =
-      INNER_WEIGHTS_CONSENSUS.inverseSigma * nInv[i]! + INNER_WEIGHTS_CONSENSUS.flowCoverage * nFlow[i]!;
+      INNER_WEIGHTS_CONSENSUS.inverseSigma * nInv[i]! +
+      INNER_WEIGHTS_CONSENSUS.flowCoverage * nFlow[i]!;
+    const rawFrequency =
+      INNER_WEIGHTS_FREQUENCY.selection * nSel[i]! +
+      INNER_WEIGHTS_FREQUENCY.top5 * nT5[i]!;
     const rawRecurrence =
       INNER_WEIGHTS_RECURRENCE.bottleneck * nBot[i]! +
       INNER_WEIGHTS_RECURRENCE.step1 * nS1[i]! +
@@ -278,9 +288,11 @@ function applyLensRaw(rows: Omit<GoldTaskBreakdown, "zCriticality" | "zConsensus
       ...r,
       rawCriticality,
       rawConsensus,
+      rawFrequency,
       rawRecurrence,
       zCriticality: 0,
       zConsensus: 0,
+      zFrequency: 0,
       zRecurrence: 0,
       fusedScore: 0,
     };
@@ -290,28 +302,38 @@ function applyLensRaw(rows: Omit<GoldTaskBreakdown, "zCriticality" | "zConsensus
 function assignZAndFuse(rows: GoldTaskBreakdown[], wNorm: GoldWeights): GoldTaskBreakdown[] {
   const zC = zScores(rows.map((r) => r.rawCriticality));
   const zS = zScores(rows.map((r) => r.rawConsensus));
+  const zF = zScores(rows.map((r) => r.rawFrequency));
   const zR = zScores(rows.map((r) => r.rawRecurrence));
 
   const active = {
     c: zC.some((z) => Math.abs(z) > 1e-9),
     s: zS.some((z) => Math.abs(z) > 1e-9),
+    f: zF.some((z) => Math.abs(z) > 1e-9),
     r: zR.some((z) => Math.abs(z) > 1e-9),
   };
   const w = effectiveWeightsAfterZeroVariance(wNorm, active);
 
   return rows.map((r, i) => {
-    const fusedScore = w.criticality * zC[i]! + w.consensus * zS[i]! + w.recurrence * zR[i]!;
+    const fusedScore =
+      w.criticality * zC[i]! +
+      w.consensus * zS[i]! +
+      w.frequency * zF[i]! +
+      w.recurrence * zR[i]!;
     return {
       ...r,
       zCriticality: zC[i]!,
       zConsensus: zS[i]!,
+      zFrequency: zF[i]!,
       zRecurrence: zR[i]!,
       fusedScore,
     };
   });
 }
 
-function sortByScore(rows: GoldTaskBreakdown[], key: "fusedScore" | "zCriticality" | "zConsensus" | "zRecurrence"): GoldTaskBreakdown[] {
+function sortByScore(
+  rows: GoldTaskBreakdown[],
+  key: "fusedScore" | "zCriticality" | "zConsensus" | "zFrequency" | "zRecurrence",
+): GoldTaskBreakdown[] {
   return [...rows].sort((a, b) => b[key] - a[key]);
 }
 
@@ -329,10 +351,12 @@ export function computePadraoOuroResearch(
 
   const zC = zScores(withLens.map((r) => r.rawCriticality));
   const zS = zScores(withLens.map((r) => r.rawConsensus));
+  const zF = zScores(withLens.map((r) => r.rawFrequency));
   const zR = zScores(withLens.map((r) => r.rawRecurrence));
   const active = {
     c: zC.some((z) => Math.abs(z) > 1e-9),
     s: zS.some((z) => Math.abs(z) > 1e-9),
+    f: zF.some((z) => Math.abs(z) > 1e-9),
     r: zR.some((z) => Math.abs(z) > 1e-9),
   };
   const weightsEffective = effectiveWeightsAfterZeroVariance(wNorm, active);
@@ -342,6 +366,7 @@ export function computePadraoOuroResearch(
   const fusedTop = sortByScore(withZ, "fusedScore").slice(0, n);
   const variantCriticality = sortByScore(withZ, "zCriticality").slice(0, n);
   const variantConsensus = sortByScore(withZ, "zConsensus").slice(0, n);
+  const variantFrequency = sortByScore(withZ, "zFrequency").slice(0, n);
   const variantRecurrence = sortByScore(withZ, "zRecurrence").slice(0, n);
 
   return {
@@ -354,6 +379,7 @@ export function computePadraoOuroResearch(
     fusedTop,
     variantCriticality,
     variantConsensus,
+    variantFrequency,
     variantRecurrence,
   };
 }
