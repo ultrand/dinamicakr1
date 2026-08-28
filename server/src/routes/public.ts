@@ -21,15 +21,32 @@ function isRateLimited(key: string) {
   return current.count > 30;
 }
 
-function parseSettingsMin(raw: string | undefined) {
+function parseVersionSettings(raw: string | undefined) {
   try {
-    const parsed = raw ? JSON.parse(raw) as { minCriticalSelected?: number; minFilledFlows?: number } : {};
+    const parsed = raw
+      ? (JSON.parse(raw) as {
+          minCriticalSelected?: number;
+          minFilledFlows?: number;
+          maxCriticalSelected?: number | null;
+          maxCriticalPerGroup?: number | null;
+        })
+      : {};
+    const maxCriticalPerGroup =
+      parsed.maxCriticalPerGroup === null || parsed.maxCriticalPerGroup === undefined
+        ? null
+        : Math.max(1, Number(parsed.maxCriticalPerGroup) || 1);
+    const maxCriticalSelected =
+      parsed.maxCriticalSelected === null || parsed.maxCriticalSelected === undefined
+        ? null
+        : Math.max(1, Number(parsed.maxCriticalSelected) || 1);
     return {
       minCriticalSelected: Math.max(1, Number(parsed.minCriticalSelected ?? 1) || 1),
       minFilledFlows: Math.max(1, Number(parsed.minFilledFlows ?? 1) || 1),
+      maxCriticalSelected,
+      maxCriticalPerGroup,
     };
   } catch {
-    return { minCriticalSelected: 1, minFilledFlows: 1 };
+    return { minCriticalSelected: 1, minFilledFlows: 1, maxCriticalSelected: null as number | null, maxCriticalPerGroup: null as number | null };
   }
 }
 
@@ -114,7 +131,7 @@ publicRouter.post("/responses", async (req, res) => {
       where: { studyVersionId },
       orderBy: { sortOrder: "asc" },
     });
-    const minima = parseSettingsMin(version.settingsJson);
+    const minima = parseVersionSettings(version.settingsJson);
     const qMap = new Map(questions.map((q) => [q.id, q]));
 
     const invalidQuestionId = answers.find((a) => !qMap.has(a.questionId));
@@ -123,9 +140,12 @@ publicRouter.post("/responses", async (req, res) => {
       return;
     }
 
-    const taskIds = new Set(
-      (await prisma.task.findMany({ where: { studyVersionId }, select: { id: true } })).map((t) => t.id),
-    );
+    const taskRows = await prisma.task.findMany({
+      where: { studyVersionId },
+      select: { id: true, etapa: true },
+    });
+    const taskIds = new Set(taskRows.map((t) => t.id));
+    const taskEtapa = new Map(taskRows.map((t) => [t.id, t.etapa || "Sem etapa"]));
 
     for (const q of questions) {
       if (!q.required) continue;
@@ -178,6 +198,27 @@ publicRouter.post("/responses", async (req, res) => {
       if (!taskIds.has(tid)) {
         res.status(400).json({ error: "Card inválido na seleção" });
         return;
+      }
+    }
+
+    if (minima.maxCriticalSelected != null && selected.length > minima.maxCriticalSelected) {
+      res.status(400).json({
+        error: `Selecione no máximo ${minima.maxCriticalSelected} tarefa(s) no total neste passo`,
+      });
+      return;
+    }
+
+    if (minima.maxCriticalPerGroup != null) {
+      const byEtapa: Record<string, number> = {};
+      for (const tid of selected) {
+        const k = taskEtapa.get(tid) ?? "Sem etapa";
+        byEtapa[k] = (byEtapa[k] ?? 0) + 1;
+        if (byEtapa[k]! > minima.maxCriticalPerGroup) {
+          res.status(400).json({
+            error: `Selecione no máximo ${minima.maxCriticalPerGroup} tarefa(s) por grupo (${k})`,
+          });
+          return;
+        }
       }
     }
 

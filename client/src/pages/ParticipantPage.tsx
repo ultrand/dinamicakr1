@@ -23,65 +23,40 @@ import { ciapMotion, ciapStagger } from "../ciap-motion";
 import { BankDraggable, FlowTrack, reorderChain, type ChainEntry } from "../components/FlowTrack";
 import { TaskCard } from "../components/TaskCard";
 import type { Question, StudyVersion, Task } from "../types";
+import { parseDynamicSettings } from "../lib/dynamicSettings";
 
 /* ─────────────────────────────────────────────
    Types
 ───────────────────────────────────────────── */
 type VersionPayload = { studyId: string; version: StudyVersion | null };
-type DynamicSettings = {
-  stepLabels: [string, string, string, string, string];
-  step1Title: string;
-  step1Sub: string;
-  step2Title: string;
-  step2Sub: string;
-  step3Title: string;
-  step3Sub: string;
-  step4Title: string;
-  step4Sub: string;
-  step5Title: string;
-  step5Sub: string;
-  minCriticalSelected: number;
-  minFilledFlows: number;
-};
 
-const DEFAULT_SETTINGS: DynamicSettings = {
-  stepLabels: ["Seleção", "Ranking", "Perguntas", "Fluxos", "Revisão"],
-  step1Title: "Selecione as tarefas críticas",
-  step1Sub: "Escolha todas as tarefas que considera difíceis de realizar no método.",
-  step2Title: "Ordene por prioridade",
-  step2Sub: "Arraste ou use ↑↓ para ordenar de forma geral, do mais crítico ao menos crítico.",
-  step3Title: "Perguntas sobre o método",
-  step3Sub: "Responda antes de montar os fluxos.",
-  step4Title: "Monte os fluxos de tarefas",
-  step4Sub: "Indique a sequência de passos que leva à tarefa crítica. Arraste do banco ou clique em + para adicionar.",
-  step5Title: "Revise e envie",
-  step5Sub: "Confirme antes de submeter.",
-  minCriticalSelected: 1,
-  minFilledFlows: 1,
-};
+function countSelectedInEtapa(tasks: Task[], selected: string[], etapa: string) {
+  return tasks.filter((t) => (t.etapa || "Sem etapa") === etapa && selected.includes(t.id)).length;
+}
 
-function parseDynamicSettings(raw: string | undefined): DynamicSettings {
-  if (!raw) return DEFAULT_SETTINGS;
-  try {
-    const parsed = JSON.parse(raw) as Partial<DynamicSettings>;
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      stepLabels: Array.isArray(parsed.stepLabels) && parsed.stepLabels.length === 5
-        ? [
-            String(parsed.stepLabels[0] ?? DEFAULT_SETTINGS.stepLabels[0]),
-            String(parsed.stepLabels[1] ?? DEFAULT_SETTINGS.stepLabels[1]),
-            String(parsed.stepLabels[2] ?? DEFAULT_SETTINGS.stepLabels[2]),
-            String(parsed.stepLabels[3] ?? DEFAULT_SETTINGS.stepLabels[3]),
-            String(parsed.stepLabels[4] ?? DEFAULT_SETTINGS.stepLabels[4]),
-          ]
-        : DEFAULT_SETTINGS.stepLabels,
-      minCriticalSelected: Math.max(1, Number(parsed.minCriticalSelected ?? DEFAULT_SETTINGS.minCriticalSelected) || 1),
-      minFilledFlows: Math.max(1, Number(parsed.minFilledFlows ?? DEFAULT_SETTINGS.minFilledFlows) || 1),
-    };
-  } catch {
-    return DEFAULT_SETTINGS;
+function validateSelectionLimits(
+  tasks: Task[],
+  selected: string[],
+  settings: DynamicSettings,
+): string | null {
+  if (selected.length < settings.minCriticalSelected) {
+    return `Selecione ao menos ${settings.minCriticalSelected} tarefa(s) antes de avançar.`;
   }
+  if (settings.maxCriticalSelected != null && selected.length > settings.maxCriticalSelected) {
+    return `Selecione no máximo ${settings.maxCriticalSelected} tarefa(s) no total neste passo.`;
+  }
+  if (settings.maxCriticalPerGroup != null) {
+    const byEtapa = new Map<string, number>();
+    for (const id of selected) {
+      const t = tasks.find((x) => x.id === id);
+      const k = t?.etapa || "Sem etapa";
+      byEtapa.set(k, (byEtapa.get(k) ?? 0) + 1);
+      if (byEtapa.get(k)! > settings.maxCriticalPerGroup) {
+        return `Selecione no máximo ${settings.maxCriticalPerGroup} tarefa(s) por grupo (${k}).`;
+      }
+    }
+  }
+  return null;
 }
 
 function capitalizeText(s: string) {
@@ -188,8 +163,16 @@ function Stepper({ step, maxReached, labels }: { step: number; maxReached: numbe
    PASSO 1 — Seleção por etapa (accordion)
 ───────────────────────────────────────────── */
 function Step1({
-  tasks, selected, dispatch, title, sub,
-}: { tasks: Task[]; selected: string[]; dispatch: React.Dispatch<Action>; title: string; sub: string }) {
+  tasks, selected, dispatch, title, sub, maxPerGroup, maxTotal,
+}: {
+  tasks: Task[];
+  selected: string[];
+  dispatch: React.Dispatch<Action>;
+  title: string;
+  sub: string;
+  maxPerGroup: number | null;
+  maxTotal: number | null;
+}) {
   const grouped = useMemo(() => {
     const map = new Map<string, Task[]>();
     for (const t of tasks) {
@@ -206,23 +189,50 @@ function Step1({
     return arr;
   }, [tasks]);
 
-  // Inicia com todos os acordeões fechados.
   const [open, setOpen] = useState<Set<string>>(() => new Set());
+  const [limitMsg, setLimitMsg] = useState<string | null>(null);
 
   const toggle = (k: string) =>
     setOpen((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
+  const trySelect = (t: Task) => {
+    if (selected.includes(t.id)) {
+      setLimitMsg(null);
+      dispatch({ type: "TOGGLE_SELECT", id: t.id });
+      return;
+    }
+    if (maxTotal != null && selected.length >= maxTotal) {
+      setLimitMsg(`Máximo de ${maxTotal} tarefa(s) no total neste passo.`);
+      return;
+    }
+    if (maxPerGroup != null) {
+      const etapa = t.etapa || "Sem etapa";
+      const n = countSelectedInEtapa(tasks, selected, etapa);
+      if (n >= maxPerGroup) {
+        setLimitMsg(`Máximo de ${maxPerGroup} tarefa(s) por grupo (${etapa}).`);
+        return;
+      }
+    }
+    setLimitMsg(null);
+    dispatch({ type: "TOGGLE_SELECT", id: t.id });
+  };
+
   return (
     <div className="wz-body">
       <div className="wz-section-hd">
-        <div>
+        <div className="wz-section-intro">
           <h2 className="wz-title">{title}</h2>
-          <p className="wz-sub">{sub}</p>
+          <div className="wz-guidance" role="note">
+            <p>{sub}</p>
+          </div>
         </div>
         <div className="wz-counter-pill">
           {selected.length} selecionada{selected.length !== 1 ? "s" : ""}
+          {maxTotal != null && <span className="muted"> · máx. {maxTotal} no total</span>}
+          {maxPerGroup != null && maxTotal == null && <span className="muted"> · máx. {maxPerGroup}/grupo</span>}
         </div>
       </div>
+      {limitMsg && <p className="error" style={{ margin: "0 0 8px" }}>{limitMsg}</p>}
 
       <div className="wz-accordion">
         {grouped.map(([etapa, etapaTasks], gi) => {
@@ -241,7 +251,9 @@ function Step1({
                 <span className="wz-accord-meta">
                   <span className="badge">{etapaTasks.length}</span>
                   {selCount > 0 && (
-                    <span className="badge badge-y">{selCount} sel.</span>
+                    <span className="badge badge-y">
+                      {selCount} sel.{maxPerGroup != null ? ` / ${maxPerGroup}` : ""}
+                    </span>
                   )}
                 </span>
                 {/* mini chips quando fechado */}
@@ -270,7 +282,7 @@ function Step1({
                           key={t.id}
                           type="button"
                           className={`crit-btn${selected.includes(t.id) ? " on" : ""}`}
-                          onClick={() => dispatch({ type: "TOGGLE_SELECT", id: t.id })}
+                          onClick={() => trySelect(t)}
                           {...ciapMotion.projectCard}
                           transition={ciapStagger(ti, 0.025)}
                         >
@@ -347,9 +359,12 @@ function Step2({
   return (
     <div className="wz-body">
       <div className="wz-section-hd">
-        <div>
+        <div className="wz-section-intro">
           <h2 className="wz-title">{title}</h2>
-          <p className="wz-sub">{sub}</p>
+          <div className="wz-guidance wz-guidance-accent" role="note">
+            <p className="wz-guidance-lead">Avalie cada tarefa individualmente</p>
+            <p>{sub}</p>
+          </div>
         </div>
       </div>
 
@@ -714,7 +729,7 @@ function Step4({
 ───────────────────────────────────────────── */
 function Step5({
   state, taskById, qHardest, qText, version,
-  submitting, err, onSubmit, title, sub, participantName, onParticipantNameChange,
+  submitting, err, onSubmit, title, sub,   participantName, onParticipantNameChange, reviewSelectedLabel,
 }: {
   state: WizardState;
   taskById: Map<string, Task>;
@@ -728,6 +743,7 @@ function Step5({
   sub: string;
   participantName: string;
   onParticipantNameChange: (name: string) => void;
+  reviewSelectedLabel: string;
 }) {
   const { orderedSelected, hardestId, why, longText, chains, flowComments, visibleFlowCount } = state;
   const top5 = orderedSelected.slice(0, visibleFlowCount);
@@ -742,7 +758,7 @@ function Step5({
       {/* resumo seleção */}
       <div className="wz-review-block">
         <div className="wz-review-hd">
-          <span>Tarefas críticas selecionadas</span>
+          <span>{reviewSelectedLabel}</span>
           <span className="badge badge-y">{orderedSelected.length}</span>
         </div>
         <div className="wz-review-rank">
@@ -898,8 +914,9 @@ export function ParticipantPage() {
 
     if (target > state.step) {
       // validate current step
-      if (state.step === 1 && state.selected.length < dynamicSettings.minCriticalSelected) {
-        setStepErr(`Selecione ao menos ${dynamicSettings.minCriticalSelected} tarefa(s) antes de avançar.`); return;
+      if (state.step === 1) {
+        const selErr = validateSelectionLimits(version?.tasks ?? [], state.selected, dynamicSettings);
+        if (selErr) { setStepErr(selErr); return; }
       }
       if (state.step === 3) {
         let invalidHardest = false;
@@ -988,7 +1005,7 @@ export function ParticipantPage() {
     <motion.div className="page wz-page" ref={topRef} {...ciapMotion.sectionFade}>
       {/* header */}
       <div className="wz-header">
-        <h1 style={{ margin: 0, fontSize: "var(--fs-md)" }}>Dinâmica — Tarefas Críticas</h1>
+        <h1 style={{ margin: 0, fontSize: "var(--fs-md)" }}>{dynamicSettings.pageTitle}</h1>
         <Stepper step={state.step} maxReached={maxReached} labels={dynamicSettings.stepLabels} />
       </div>
 
@@ -1002,7 +1019,15 @@ export function ParticipantPage() {
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
           {state.step === 1 && (
-            <Step1 tasks={version.tasks} selected={state.selected} dispatch={dispatch} title={dynamicSettings.step1Title} sub={dynamicSettings.step1Sub} />
+            <Step1
+              tasks={version.tasks}
+              selected={state.selected}
+              dispatch={dispatch}
+              title={dynamicSettings.step1Title}
+              sub={dynamicSettings.step1Sub}
+              maxPerGroup={dynamicSettings.maxCriticalPerGroup}
+              maxTotal={dynamicSettings.maxCriticalSelected}
+            />
           )}
           {state.step === 2 && (
             <Step2 orderedSelected={state.orderedSelected} taskById={taskById} dispatch={dispatch} title={dynamicSettings.step2Title} sub={dynamicSettings.step2Sub} />
@@ -1040,6 +1065,7 @@ export function ParticipantPage() {
               sub={dynamicSettings.step5Sub}
               participantName={participantName}
               onParticipantNameChange={setParticipantName}
+              reviewSelectedLabel={dynamicSettings.reviewSelectedLabel}
             />
           )}
         </motion.div>

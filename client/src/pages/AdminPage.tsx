@@ -18,6 +18,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { apiGet, apiSend, downloadFile } from "../api";
 import { ciapMotion } from "../ciap-motion";
+import { parseDynamicSettings, templateForStage, type DynamicSettings, type ResearchStage } from "../lib/dynamicSettings";
 import type { Question, Task } from "../types";
 
 const LS = "dinamica_admin_token";
@@ -41,64 +42,10 @@ const WIZARD_STEPS = [
 type Overview = {
   study: { id: string; name: string };
   draft: { id: string; tasks: Task[]; questions: Question[]; settingsJson?: string };
-  publishedVersions: { id: string; number: number; publishedAt: string | null; label: string; _count: { responses: number } }[];
+  publishedVersions: { id: string; number: number; publishedAt: string | null; label: string; settingsJson?: string; _count: { responses: number; tasks: number } }[];
 };
 
-type DynamicSettings = {
-  stepLabels: [string, string, string, string, string];
-  step1Title: string;
-  step1Sub: string;
-  step2Title: string;
-  step2Sub: string;
-  step3Title: string;
-  step3Sub: string;
-  step4Title: string;
-  step4Sub: string;
-  step5Title: string;
-  step5Sub: string;
-  minCriticalSelected: number;
-  minFilledFlows: number;
-};
-
-const DEFAULT_SETTINGS: DynamicSettings = {
-  stepLabels: ["Seleção", "Ranking", "Perguntas", "Fluxos", "Revisão"],
-  step1Title: "Selecione as tarefas críticas",
-  step1Sub: "Escolha todas as tarefas que considera difíceis de realizar no método.",
-  step2Title: "Ordene por prioridade",
-  step2Sub: "Arraste ou use ↑↓ para ordenar de forma geral, do mais crítico ao menos crítico.",
-  step3Title: "Perguntas sobre o método",
-  step3Sub: "Responda antes de montar os fluxos.",
-  step4Title: "Monte os fluxos de tarefas",
-  step4Sub: "Indique a sequência de passos que leva à tarefa crítica. Arraste do banco ou clique em + para adicionar.",
-  step5Title: "Revise e envie",
-  step5Sub: "Confirme antes de submeter.",
-  minCriticalSelected: 1,
-  minFilledFlows: 1,
-};
-
-function parseSettings(raw: string | undefined): DynamicSettings {
-  if (!raw) return DEFAULT_SETTINGS;
-  try {
-    const parsed = JSON.parse(raw) as Partial<DynamicSettings>;
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      stepLabels: Array.isArray(parsed.stepLabels) && parsed.stepLabels.length === 5
-        ? [
-            String(parsed.stepLabels[0] ?? DEFAULT_SETTINGS.stepLabels[0]),
-            String(parsed.stepLabels[1] ?? DEFAULT_SETTINGS.stepLabels[1]),
-            String(parsed.stepLabels[2] ?? DEFAULT_SETTINGS.stepLabels[2]),
-            String(parsed.stepLabels[3] ?? DEFAULT_SETTINGS.stepLabels[3]),
-            String(parsed.stepLabels[4] ?? DEFAULT_SETTINGS.stepLabels[4]),
-          ]
-        : DEFAULT_SETTINGS.stepLabels,
-      minCriticalSelected: Math.max(1, Number(parsed.minCriticalSelected ?? 1) || 1),
-      minFilledFlows: Math.max(1, Number(parsed.minFilledFlows ?? 1) || 1),
-    };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
+const parseSettings = parseDynamicSettings;
 
 /* ── Sortable question card ──────────────────────────────── */
 function SortableQ({
@@ -225,7 +172,8 @@ export function AdminPage() {
   const [bulk,       setBulk]       = useState("");
   const [bulkOpen,   setBulkOpen]   = useState(false);
   const [dupLoading, setDupLoading] = useState<string | null>(null);
-  const [settings, setSettings] = useState<DynamicSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<DynamicSettings>(() => parseSettings(undefined));
+  const [stageLoading, setStageLoading] = useState(false);
 
   const authed = token.length > 0;
 
@@ -334,18 +282,56 @@ export function AdminPage() {
   };
 
   const restoreStep = async (n: 1 | 2 | 3 | 4 | 5) => {
+    const tpl = templateForStage(settings.researchStage);
     const labels = [...settings.stepLabels] as DynamicSettings["stepLabels"];
-    labels[n - 1] = DEFAULT_SETTINGS.stepLabels[n - 1];
+    labels[n - 1] = tpl.stepLabels[n - 1];
     const next: DynamicSettings = {
       ...settings,
       stepLabels: labels,
-      [`step${n}Title`]: DEFAULT_SETTINGS[`step${n}Title` as keyof DynamicSettings] as string,
-      [`step${n}Sub`]: DEFAULT_SETTINGS[`step${n}Sub` as keyof DynamicSettings] as string,
-      ...(n === 1 ? { minCriticalSelected: DEFAULT_SETTINGS.minCriticalSelected } : {}),
-      ...(n === 4 ? { minFilledFlows: DEFAULT_SETTINGS.minFilledFlows } : {}),
+      [`step${n}Title`]: tpl[`step${n}Title` as keyof DynamicSettings] as string,
+      [`step${n}Sub`]: tpl[`step${n}Sub` as keyof DynamicSettings] as string,
+      ...(n === 1
+        ? {
+            minCriticalSelected: tpl.minCriticalSelected,
+            maxCriticalSelected: tpl.maxCriticalSelected,
+            maxCriticalPerGroup: tpl.maxCriticalPerGroup,
+          }
+        : {}),
+      ...(n === 4 ? { minFilledFlows: tpl.minFilledFlows } : {}),
+      ...(n === 5 ? { reviewSelectedLabel: tpl.reviewSelectedLabel, pageTitle: tpl.pageTitle } : {}),
     };
     setSettings(next);
     await saveSettings(next);
+  };
+
+  const applyResearchStage = async (stage: ResearchStage) => {
+    if (stage === settings.researchStage) return;
+    const label = stage === "metodo" ? "Método" : "Escopo";
+    if (
+      !confirm(
+        `Carregar deck ${label} no rascunho?\n\n• Substitui os cards, textos e perguntas do rascunho\n• Escopo usa a versão publicada (ou seed) — ex.: 35 cards\n• Método usa o deck de 26 cards\n• Versões já publicadas não são alteradas`,
+      )
+    ) {
+      return;
+    }
+    setStageLoading(true);
+    setErr(null);
+    try {
+      const result = await apiSend<{ tasksCreated: number; taskSource: string; stage: string }>(
+        "/api/admin/draft/apply-stage",
+        "POST",
+        { stage },
+        token,
+      );
+      flash(
+        `Deck ${label} carregado: ${result.tasksCreated} cards (${result.taskSource}). Revise e publique quando estiver pronto.`,
+      );
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Erro ao trocar tipo de pesquisa");
+    } finally {
+      setStageLoading(false);
+    }
   };
 
   const downloadExport = async (vId: string, fmt: "csv" | "json") => {
@@ -413,11 +399,29 @@ export function AdminPage() {
           <span className="badge" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d" }}>
             Rascunho em edição
           </span>
+          <span className="badge" style={{ background: settings.researchStage === "metodo" ? "#dbeafe" : "#f3f4f6", color: "#1e3a5f" }}>
+            {settings.researchStage === "metodo" ? "Método" : "Escopo"}
+          </span>
           <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
             {overview.draft.tasks.length} cards · {overview.draft.questions.length} perguntas
           </span>
+          <div className="row-s" style={{ flexWrap: "wrap", gap: 6 }}>
+            <label className="row-s muted" style={{ fontSize: "var(--fs-xs)", gap: 4 }}>
+              Tipo de pesquisa (carrega deck completo):
+              <select
+                value={settings.researchStage}
+                disabled={stageLoading}
+                onChange={(e) => void applyResearchStage(e.target.value as ResearchStage)}
+                style={{ fontSize: "var(--fs-xs)" }}
+              >
+                <option value="escopo">Escopo</option>
+                <option value="metodo">Método</option>
+              </select>
+              {stageLoading && <span>Carregando…</span>}
+            </label>
+          </div>
           <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
-            Salvar edita rascunho (não aparece no participante até publicar)
+            Salvar edita rascunho — publique para o participante ver. Versões Escopo publicadas não mudam.
           </span>
           <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>ID: {overview.draft.id.slice(0, 8)}…</span>
         </div>
@@ -473,14 +477,46 @@ export function AdminPage() {
                     />
                   </div>
                   {ws.n === 1 && (
-                    <div className="field" style={{ flex: "0 0 155px" }}>
-                      <label>Mínimo de tarefas selecionadas</label>
-                      <input
-                        type="number" min={1}
-                        value={settings.minCriticalSelected}
-                        onChange={(e) => setSettings((s) => ({ ...s, minCriticalSelected: Math.max(1, Number(e.target.value) || 1) }))}
-                      />
-                    </div>
+                    <>
+                      <div className="field" style={{ flex: "0 0 155px" }}>
+                        <label>Mínimo selecionadas</label>
+                        <input
+                          type="number" min={1}
+                          value={settings.minCriticalSelected}
+                          onChange={(e) => setSettings((s) => ({ ...s, minCriticalSelected: Math.max(1, Number(e.target.value) || 1) }))}
+                        />
+                      </div>
+                      <div className="field" style={{ flex: "0 0 175px" }}>
+                        <label>Máx. total no passo 1 (vazio = sem limite)</label>
+                        <input
+                          type="number" min={1}
+                          placeholder="—"
+                          value={settings.maxCriticalSelected ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value.trim();
+                            setSettings((s) => ({
+                              ...s,
+                              maxCriticalSelected: v === "" ? null : Math.max(1, Number(v) || 1),
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="field" style={{ flex: "0 0 175px" }}>
+                        <label>Máx. por grupo (vazio = sem limite)</label>
+                        <input
+                          type="number" min={1}
+                          placeholder="—"
+                          value={settings.maxCriticalPerGroup ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value.trim();
+                            setSettings((s) => ({
+                              ...s,
+                              maxCriticalPerGroup: v === "" ? null : Math.max(1, Number(v) || 1),
+                            }));
+                          }}
+                        />
+                      </div>
+                    </>
                   )}
                   {ws.n === 4 && (
                     <div className="field" style={{ flex: "0 0 155px" }}>
@@ -547,6 +583,26 @@ export function AdminPage() {
       {/* ── TAB: Cards ── */}
       {tab === "c" && (
         <div className="stack-s">
+          <div className="panel" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
+            <div className="panel-body" style={{ fontSize: "var(--fs-sm)" }}>
+              <strong>Esta aba edita só o rascunho</strong> ({overview?.draft.tasks.length ?? 0} cards, tipo{" "}
+              <strong>{settings.researchStage === "metodo" ? "Método" : "Escopo"}</strong>).
+              {(overview?.publishedVersions.length ?? 0) > 0 ? (
+                <>
+                  {" "}
+                  Versões já publicadas <strong>não mudam</strong> quando você carrega Método aqui. Escopo publicado:{" "}
+                  {overview!.publishedVersions.map((v) => (
+                    <span key={v.id}>
+                      v{v.number} ({v._count.tasks} cards{v.label ? ` — ${v.label}` : ""})
+                    </span>
+                  ))}{" "}
+                  → veja na aba <strong>Versões</strong> ou use <strong>Duplicar → rascunho</strong> para editar de novo.
+                </>
+              ) : (
+                <> Nenhuma versão publicada ainda.</>
+              )}
+            </div>
+          </div>
           <div className="row" style={{ gap: 6 }}>
             <input type="search" placeholder="Buscar cards…" value={qSearch}
               onChange={(e) => setQSearch(e.target.value)} style={{ width: 220 }} />
@@ -557,7 +613,7 @@ export function AdminPage() {
 
           {bulkOpen && (
             <div className="panel">
-              <div className="panel-hd">Adicionar em massa — uma tarefa por linha: VERBO Texto principal</div>
+              <div className="panel-hd">Adicionar em massa — uma linha por card: VERBO texto · ou frase TAB atividade TAB etapa</div>
               <div className="panel-body stack-s">
                 <textarea value={bulk} onChange={(e) => setBulk(e.target.value)} rows={6}
                   placeholder={"ENTENDER Cenário do serviço\nMAPEAR Pessoas envolvidas\n…"} />
@@ -611,6 +667,7 @@ export function AdminPage() {
                   <th style={{ width: 36 }}>v</th>
                   <th>Nome</th>
                   <th>Tipo</th>
+                  <th style={{ width: 72 }}>Cards</th>
                   <th>Publicada em</th>
                   <th style={{ width: 60 }}>Resp.</th>
                   <th>Export</th>
@@ -622,7 +679,17 @@ export function AdminPage() {
                   <tr key={v.id}>
                     <td><strong>v{v.number}</strong></td>
                     <td>{v.label?.trim() ? v.label : "—"}</td>
-                    <td><span className="badge">Oficial publicada</span></td>
+                    <td>
+                      {(() => {
+                        try {
+                          const s = JSON.parse(v.settingsJson ?? "{}") as { researchStage?: string };
+                          return s.researchStage === "metodo" ? "Método" : "Escopo";
+                        } catch {
+                          return "Escopo";
+                        }
+                      })()}
+                    </td>
+                    <td>{v._count.tasks} cards</td>
                     <td>{v.publishedAt ? new Date(v.publishedAt).toLocaleString("pt-BR") : "—"}</td>
                     <td>{v._count.responses}</td>
                     <td>

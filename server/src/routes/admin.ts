@@ -5,6 +5,8 @@ import { ensureDraft, getDraftVersion, getOrCreateStudy, publishDraft } from "..
 import { taskHasResponses } from "../services/taskUsage.js";
 import { buildAnalytics } from "../services/analyticsService.js";
 import { buildResponsesDetail } from "../services/responseDetailService.js";
+import { parseTaskLine } from "../lib/parseTaskLine.js";
+import { applyStageToDraft } from "../services/stageDraftService.js";
 
 export const adminRouter = Router();
 adminRouter.use(adminAuth);
@@ -16,7 +18,7 @@ adminRouter.get("/overview", async (_req, res) => {
     const published = await prisma.studyVersion.findMany({
       where: { studyId: study.id, isDraft: false },
       orderBy: { number: "desc" },
-      select: { id: true, number: true, publishedAt: true, label: true, _count: { select: { responses: true } } },
+      select: { id: true, number: true, publishedAt: true, label: true, settingsJson: true, _count: { select: { responses: true, tasks: true } } },
     });
     const draftFull = await prisma.studyVersion.findUnique({
       where: { id: draft.id },
@@ -158,18 +160,15 @@ adminRouter.post("/tasks/bulk", async (req, res) => {
     const lines = raw.split(/\r?\n/);
     const created: string[] = [];
     for (const line of lines) {
-      const t = line.trim();
-      if (!t) continue;
-      const space = t.indexOf(" ");
-      const verb = space === -1 ? t : t.slice(0, space);
-      const textoPrincipal = space === -1 ? "" : t.slice(space + 1).trim();
+      const p = parseTaskLine(line);
+      if (!p) continue;
       const row = await prisma.task.create({
         data: {
           studyVersionId: draft.id,
-          verb,
-          textoPrincipal,
-          atividade: "",
-          etapa: "",
+          verb: p.verb,
+          textoPrincipal: p.textoPrincipal,
+          atividade: p.atividade,
+          etapa: p.etapa,
         },
       });
       created.push(row.id);
@@ -178,6 +177,33 @@ adminRouter.post("/tasks/bulk", async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Erro" });
+  }
+});
+
+/** Carrega deck Método no rascunho (não altera versões Escopo já publicadas). */
+adminRouter.post("/draft/load-metodo", async (_req, res) => {
+  try {
+    const result = await applyStageToDraft("metodo");
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao carregar deck Método" });
+  }
+});
+
+/** Troca rascunho para Escopo ou Método: cards + textos + perguntas. Publicadas intactas. */
+adminRouter.post("/draft/apply-stage", async (req, res) => {
+  try {
+    const stage = (req.body as { stage?: string }).stage;
+    if (stage !== "escopo" && stage !== "metodo") {
+      res.status(400).json({ error: 'stage deve ser "escopo" ou "metodo"' });
+      return;
+    }
+    const result = await applyStageToDraft(stage);
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao aplicar tipo de pesquisa" });
   }
 });
 

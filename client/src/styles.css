@@ -935,10 +935,14 @@ td input:focus, td select:focus {
   margin-bottom: var(--ciap-space-3);
   flex-wrap: wrap;
 }
+.wz-section-intro {
+  flex: 1;
+  min-width: min(100%, 520px);
+}
 .wz-title {
-  font-size: var(--fs-md);
+  font-size: var(--fs-lg);
   font-weight: 700;
-  margin: 0 0 3px;
+  margin: 0 0 var(--ciap-space-2);
   letter-spacing: -0.02em;
 }
 .wz-sub {
@@ -946,6 +950,31 @@ td input:focus, td select:focus {
   color: var(--ink-2);
   margin: 0;
   line-height: 1.5;
+}
+.wz-guidance {
+  background: var(--surface-2, #f4f6f8);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-md, 10px);
+  padding: var(--ciap-space-3) var(--ciap-space-3);
+  margin: 0;
+}
+.wz-guidance p {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--ink-1, #1a1a1a);
+}
+.wz-guidance-accent {
+  background: #fff8eb;
+  border-color: #f0d9a8;
+  border-left-color: #e6a817;
+}
+.wz-guidance-lead {
+  font-weight: 800 !important;
+  font-size: var(--fs-lg) !important;
+  margin-bottom: 6px !important;
+  letter-spacing: -0.02em;
 }
 .wz-counter-pill {
   flex-shrink: 0;
@@ -1354,10 +1383,39 @@ td input:focus, td select:focus {
 /* fluxo sem scroll: preenche horizontal e quebra linhas */
 .flow-wrap-block { width: 100%; }
 .flow-rail-wrap {
+  position: relative;
   display: flex;
   align-items: stretch;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 16px 14px;
+  row-gap: 18px;
+}
+.flow-rail-node {
+  position: relative;
+  z-index: 1;
+  background: var(--surface, #fff);
+}
+.flow-connectors-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 0;
+}
+.flow-connector-path {
+  fill: none;
+  stroke: #64748b;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.72;
+}
+.flow-connector-path.is-dest {
+  stroke: #7c3aed;
+  stroke-width: 1.85;
+  opacity: 0.78;
 }
 .flow-step-wrap {
   position: relative;
@@ -1404,13 +1462,6 @@ td input:focus, td select:focus {
   right: 4px;
   z-index: 3;
 }
-.flow-arrow-inline {
-  align-self: center;
-  font-size: 12px;
-  color: var(--ink-3);
-  padding: 0 2px;
-}
-.flow-arrow-inline.flow-arrow-dest { color: var(--accent); font-weight: 700; }
 .flow-drop-wrap {
   display: flex;
   align-items: center;
@@ -1424,6 +1475,7 @@ td input:focus, td select:focus {
   text-align: center;
   padding: 8px;
   transition: all 0.18s ease;
+  background: var(--surface, #fff);
 }
 .flow-drop-wrap.compact {
   min-width: 30px;
@@ -1451,55 +1503,81 @@ td input:focus, td select:focus {
   color: var(--accent);
 }
 
-/* card destino — CHEGAR EM */
+/* card destino — CHEGAR EM (mesma proporção dos passos) */
 @keyframes destPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.35), 0 2px 8px rgba(124,58,237,0.08); }
-  50%       { box-shadow: 0 0 0 5px rgba(124,58,237,0.10), 0 4px 14px rgba(124,58,237,0.15); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.2), 0 2px 8px rgba(124,58,237,0.06); }
+  50%       { box-shadow: 0 0 0 3px rgba(124,58,237,0.08), 0 4px 12px rgba(124,58,237,0.1); }
 }
-@keyframes bullseyeSpin {
-  0%   { transform: rotate(0deg) scale(1); }
-  25%  { transform: rotate(0deg) scale(1.12); }
-  50%  { transform: rotate(0deg) scale(1); }
-  75%  { transform: rotate(0deg) scale(0.92); }
-  100% { transform: rotate(0deg) scale(1); }
+.flow-dest-wrap {
+  width: 170px;
+  flex-shrink: 0;
 }
 .flow-dest-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  position: relative;
+  width: 100%;
   border: 2px solid var(--accent);
-  border-radius: var(--r-md);
-  background: rgba(124, 58, 237, 0.06);
-  min-width: 150px;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(124,58,237,0.08);
   transition: background 0.3s, box-shadow 0.3s;
 }
 .flow-rail-wrap.active .flow-dest-card {
-  background: rgba(124,58,237,0.11);
   animation: destPulse 2.2s ease-in-out infinite;
 }
-.flow-dest-bullseye {
-  font-size: 22px;
-  color: var(--accent);
-  flex-shrink: 0;
-  line-height: 1;
-  transition: transform 0.3s;
-}
-.flow-rail-wrap.active .flow-dest-bullseye {
-  animation: bullseyeSpin 2.2s ease-in-out infinite;
-}
-.flow-dest-label {
-  font-size: 9px;
+.flow-dest-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  font-size: 8px;
   font-weight: 800;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--accent);
-  margin-bottom: 2px;
+  background: rgba(255,255,255,0.94);
+  border-radius: 6px;
+  padding: 2px 5px;
+  line-height: 1.2;
 }
-.flow-dest-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.flow-dest-verb { font-size: 9px; font-weight: 800; color: var(--ink); letter-spacing: 0.04em; }
-.flow-dest-text { font-size: 13px; font-weight: 700; color: var(--ink); }
-.flow-dest-meta { font-size: 9px; color: var(--ink-3); }
+.flow-dest-top {
+  background: rgba(124, 58, 237, 0.1);
+  padding: var(--ciap-space-2) var(--ciap-space-3);
+  padding-top: 18px;
+  min-height: 104px;
+  box-sizing: border-box;
+}
+.flow-dest-verb {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1.2;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.flow-dest-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: #18181b;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.flow-dest-foot {
+  background: var(--surface);
+  padding: var(--ciap-space-2) var(--ciap-space-3);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  line-height: 1.4;
+  border-top: 1px solid rgba(124, 58, 237, 0.15);
+}
+.flow-dest-foot strong { color: var(--ink-2); font-weight: 600; }
+.flow-dest-empty { color: #bbb; }
 
 /* trilhas */
 @keyframes trackActivePulse {
@@ -1581,12 +1659,6 @@ td input:focus, td select:focus {
   font-weight: 600;
 }
 .wz-dup-toast::before { content: '⚠'; font-size: 11px; }
-/* animated arrow before destination */
-.flow-arrow-animated {
-  font-size: 15px;
-  animation: arrowPulse 1s ease-in-out infinite;
-  color: var(--accent);
-}
 .wz-flow-track-hd {
   display: flex;
   align-items: center;

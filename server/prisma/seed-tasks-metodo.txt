@@ -1,0 +1,27 @@
+# Formato: frase\tatividade\tetapa (etapa = grupo do acordeão)
+Definir recorte amplo e representativo de pesquisa	Recorte de Pesquisa · Universo de Pesquisa	Arranjo Amostral
+Definir conjunto máximo de indivíduos ou entidades	Recorte de Pesquisa · População de Pesquisa	Arranjo Amostral
+Definir perfis generalistas de indivíduos	Recorte de Pesquisa · Amostra de Pesquisa	Arranjo Amostral
+Definir características e critérios	Recorte de Pesquisa · Amostra de Pesquisa	Arranjo Amostral
+Definir tamanho da amostra	Recorte de Pesquisa · Amostra de Pesquisa	Arranjo Amostral
+Estruturar tabela de screening	Recorte de Pesquisa · Amostra de Pesquisa	Arranjo Amostral
+Encontrar pessoas ou entidades em bancos de dados confiáveis	Recrutamento de Perfis · Identificação de Participantes	Arranjo Amostral
+Agendar interação com participantes	Recrutamento de Perfis · Agendamento de Participantes	Arranjo Amostral
+Substituir participantes inadequados	Recrutamento de Perfis · Agendamento de Participantes	Arranjo Amostral
+Planejar idas e vindas em viagens distantes	Recrutamento de Perfis · Estratégia de Acesso ao Campo	Arranjo Amostral
+Recorrer às SLAs de órgãos reguladores	Recrutamento de Perfis · Estratégia de Acesso ao Campo	Arranjo Amostral
+Identificar atores de influência	Recrutamento de Perfis · Estratégia de Acesso ao Campo	Arranjo Amostral
+Selecionar paradigma de design adequado às condições	Técnicas de Coleta · Paradigma Metodológico	Seleção Metodológica
+Combinar métodos, técnicas e ferramentas	Técnicas de Coleta · Organização de Instrumentos	Seleção Metodológica
+Customizar técnicas e ferramentas	Técnicas de Coleta · Organização de Instrumentos	Seleção Metodológica
+Construir materiais facilitadores da coleta	Materiais de Coleta · Construção de Materiais	Seleção Metodológica
+Construir guias de coleta de dados	Materiais de Coleta · Construção de Materiais	Seleção Metodológica
+Construir roteiros da operação de coleta	Materiais de Coleta · Construção de Materiais	Seleção Metodológica
+Construir materiais interativos como artefato	Materiais de Coleta · Construção de Materiais	Seleção Metodológica
+Criar formulário de termo de consentimento livre e esclarecido	Protocolos Técnicos · Criação de TCLE	Preparação Pré-campo
+Criar protocolo de interação com informações da pesquisa	Protocolos Técnicos · Criação de Protocolos Introdutórios	Preparação Pré-campo
+Criar termo de confidencialidade para preservar o cliente	Protocolos Técnicos · Criação de Termos de Confidencialidade	Preparação Pré-campo
+Testar guias de coleta de dados com perfis piloto	Testagem de Materiais · Simulação de Coleta de Dados	Preparação Pré-campo
+Testar roteiros da operação de coleta	Testagem de Materiais · Simulação de Coleta de Dados	Preparação Pré-campo
+Testar protocolos e rituais de interação	Testagem de Materiais · Simulação de Coleta de Dados	Preparação Pré-campo
+Testar ciclos de adaptação dos instrumentos	Testagem de Materiais · Simulação de Coleta de Dados	Preparação Pré-campo

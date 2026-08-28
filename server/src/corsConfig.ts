@@ -17,7 +17,8 @@ export function corsOptionsFromEnv(): CorsOptions {
   );
   return {
     origin(origin, callback) {
-      if (!origin || allowed.has(origin)) {
+      // Cursor Glass / Simple Browser (preview embutido)
+      if (!origin || allowed.has(origin) || origin.startsWith("vscode-file://")) {
         callback(null, true);
         return;
       }

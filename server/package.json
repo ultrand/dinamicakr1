@@ -14,7 +14,11 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:migrate": "prisma migrate dev",
-    "backfill:critical-rank": "tsx scripts/backfill-critical-rank.ts"
+    "backfill:critical-rank": "tsx scripts/backfill-critical-rank.ts",
+    "export:synthesis": "tsx scripts/export-synthesis-table.ts",
+    "load:metodo-draft": "tsx scripts/load-metodo-draft.ts",
+    "load:stage-draft": "tsx scripts/load-stage-draft.ts",
+    "audit:supabase": "tsx scripts/audit-supabase.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
