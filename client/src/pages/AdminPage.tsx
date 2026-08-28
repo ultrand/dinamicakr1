@@ -181,7 +181,19 @@ export function AdminPage() {
     if (!token) return;
     setErr(null);
     try { setOverview(await apiGet<Overview>("/api/admin/overview", token)); }
-    catch (e) { setErr(e instanceof Error ? e.message : "Erro"); setOverview(null); }
+    catch (e) {
+      const message = e instanceof Error ? e.message : "Erro";
+      if (message.includes("Não autorizado") || message.includes("Token incorreto")) {
+        localStorage.removeItem(LS);
+        setToken("");
+        setInput("");
+        setOverview(null);
+        setErr(message);
+        return;
+      }
+      setErr(message);
+      setOverview(null);
+    }
   }, [token]);
 
   useEffect(() => { if (token) localStorage.setItem(LS, token); void load(); }, [token, load]);
@@ -368,7 +380,10 @@ export function AdminPage() {
   if (!authed) return (
     <motion.div className="page" style={{ maxWidth: 480 }} {...ciapMotion.wizardModal}>
       <h1>Admin</h1>
-      <p className="muted">Token ADMIN_TOKEN do server/.env</p>
+      <p className="muted">
+        Local: <code>ADMIN_TOKEN</code> em <code>server/.env</code>.
+        Produção (Vercel): Settings → Environment Variables → <code>ADMIN_TOKEN</code>.
+      </p>
       <div className="row" style={{ marginTop: 12 }}>
         <input type="password" placeholder="Token…" value={input} style={{ flex: 1 }}
           onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setToken(input)} />

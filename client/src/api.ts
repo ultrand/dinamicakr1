@@ -1,11 +1,17 @@
 /** Em produção no Vercel, defina VITE_API_BASE com a URL do backend (ex.: https://api.seudominio.com), sem barra no final. */
 const base = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ?? "";
 
-function apiHint() {
+function apiHint(status?: number) {
+  if (status === 401) {
+    if (import.meta.env.DEV) {
+      return " Token incorreto. Use o ADMIN_TOKEN de server/.env (padrão: dev-admin-token-change-me).";
+    }
+    return " Token incorreto. Em produção use o ADMIN_TOKEN definido na Vercel (Settings → Environment Variables), não o do server/.env local.";
+  }
   if (import.meta.env.DEV) {
     return " Verifique se o backend está rodando (na raiz: npm run dev — API em :3001). Abra o app em http://localhost:5173";
   }
-  return " Verifique VITE_API_BASE no build e se a API está no ar com CORS liberado para este domínio.";
+  return " Verifique se a API está no ar. No mesmo domínio da Vercel, VITE_API_BASE pode ficar vazio.";
 }
 
 function messageFromErrorBody(t: string, status: number) {
@@ -32,7 +38,7 @@ export async function apiGet<T>(path: string, token?: string): Promise<T> {
   }
   if (!r.ok) {
     const t = await r.text();
-    throw new Error(`${messageFromErrorBody(t, r.status)}${apiHint()}`);
+    throw new Error(`${messageFromErrorBody(t, r.status)}${apiHint(r.status)}`);
   }
   try {
     return (await r.json()) as T;
@@ -62,7 +68,7 @@ export async function apiSend<T>(
   }
   if (!r.ok) {
     const t = await r.text();
-    throw new Error(`${messageFromErrorBody(t, r.status)}${apiHint()}`);
+    throw new Error(`${messageFromErrorBody(t, r.status)}${apiHint(r.status)}`);
   }
   const ct = r.headers.get("content-type");
   if (ct?.includes("application/json")) return r.json() as Promise<T>;
@@ -86,7 +92,7 @@ export async function downloadFile(path: string, token: string, fallbackName: st
   }
   if (!r.ok) {
     const t = await r.text();
-    throw new Error(`${messageFromErrorBody(t, r.status)}${apiHint()}`);
+    throw new Error(`${messageFromErrorBody(t, r.status)}${apiHint(r.status)}`);
   }
   const blob = await r.blob();
   const url = URL.createObjectURL(blob);
