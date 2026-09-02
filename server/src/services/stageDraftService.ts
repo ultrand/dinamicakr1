@@ -13,11 +13,12 @@ export const ESCOPO_SETTINGS_JSON = {
   researchStage: "escopo" as const,
   stepLabels: ["Seleção", "Ranking", "Perguntas", "Fluxos", "Revisão"],
   step1Title: "Selecione as tarefas críticas",
-  step1Sub: "Escolha todas as tarefas que considera difíceis de realizar no método.",
+  step1Sub: "Marque as tarefas indispensáveis para o serviço.",
   step2Title: "Ordene por prioridade",
-  step2Sub: "Arraste ou use ↑↓ para ordenar de forma geral, do mais crítico ao menos crítico.",
+  step2Sub: "Arraste ou use ↑↓ do mais crítico ao menos crítico.",
   step3Title: "Perguntas sobre o método",
-  step3Sub: "Responda antes de montar os fluxos.",
+  step3Sub:
+    "Entre as tarefas que você selecionou, indique a mais difícil e explique por quê. Nos tópicos listados abaixo, descreva as dificuldades que teve em cada um e explique por quê.",
   step4Title: "Monte os fluxos de tarefas",
   step4Sub:
     "Indique a sequência de passos que leva à tarefa crítica. Arraste do banco ou clique em + para adicionar.",
@@ -34,14 +35,15 @@ export const ESCOPO_SETTINGS_JSON = {
 export const METODO_SETTINGS_JSON = {
   researchStage: "metodo" as const,
   stepLabels: ["Seleção", "Relevância", "Perguntas", "Fluxos", "Revisão"],
-  step1Title: "Tarefas fundamentais e relevantes",
+  step1Title: "Selecione até 10 tarefas",
   step1Sub:
-    "Quais tarefas são as mais relevantes e fundamentais para a condução do projeto e para o alinhamento com o cliente? Selecione até 10 tarefas no total.",
-  step2Title: "Ordene por relevância individual",
+    "Escolha as mais relevantes e fundamentais para conduzir o projeto e alinhar com o cliente.",
+  step2Title: "Ordene por relevância",
   step2Sub:
-    "Ordene da mais fundamental e relevante para a menos. Isto não é ordem de execução nem cadeia de dependências — isso você fará no passo Fluxos, mais adiante.",
+    "Da mais fundamental à menos. Não é ordem de execução — avalie cada tarefa individualmente.",
   step3Title: "Dificuldades",
-  step3Sub: "Entre as tarefas que você selecionou, indique a mais difícil e explique por quê.",
+  step3Sub:
+    "Entre as tarefas relevantes selecionadas, indique a mais difícil e explique por quê. Depois, para cada tarefa do segundo bloco abaixo, diga também o que dificulta a execução.",
   step4Title: "Monte os fluxos",
   step4Sub:
     "Para cada tarefa relevante, indique a sequência de passos (pré-requisitos) necessários até chegar nela.",
@@ -66,7 +68,7 @@ const ESCOPO_QUESTION_COPY: Record<string, { title: string; helpText: string }> 
   },
   hardest_critical: {
     title: "Mais difícil entre as críticas",
-    helpText: "Entre as críticas selecionadas, qual foi a mais difícil? Por quê?",
+    helpText: "Entre as críticas selecionadas, qual foi a mais difícil? Explique por quê.",
   },
   text_long: {
     title: "Dificuldades conceituais",
@@ -88,8 +90,7 @@ const METODO_QUESTION_COPY: Record<string, { title: string; helpText: string }> 
   },
   critical_rank: {
     title: "Ordem de relevância",
-    helpText:
-      "Ordene as tarefas selecionadas do mais fundamental e relevante ao menos. Avalie cada tarefa individualmente — a ordem de execução e dependências será feita no passo Fluxos.",
+    helpText: "Ordene do mais fundamental ao menos. Avalie cada tarefa individualmente.",
   },
   hardest_critical: {
     title: "Mais difícil entre as relevantes",
@@ -99,7 +100,7 @@ const METODO_QUESTION_COPY: Record<string, { title: string; helpText: string }> 
   text_long: {
     title: "Dificuldades metodológicas",
     helpText:
-      "Quais foram suas principais dificuldades em definir recorte amostral, seleção metodológica ou preparação pré-campo?",
+      "Para cada tarefa dos chips abaixo, descreva o que foi difícil, trabalhoso ou confuso de realizar na prática.",
   },
   flow_builder_per_critical: {
     title: "Fluxos por tarefa relevante",

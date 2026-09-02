@@ -946,10 +946,22 @@ td input:focus, td select:focus {
   letter-spacing: -0.02em;
 }
 .wz-sub {
-  font-size: var(--fs-sm);
-  color: var(--ink-2);
+  font-size: var(--fs-md);
+  color: var(--ink-1, #1a1a1a);
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
+  max-width: 68ch;
+  padding: 10px 14px;
+  background: #f8f9fb;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+}
+.wz-hint {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  margin: 6px 0 0;
+  line-height: 1.45;
 }
 .wz-guidance {
   background: var(--surface-2, #f4f6f8);
@@ -984,6 +996,59 @@ td input:focus, td select:focus {
   padding: 3px 12px;
   font-size: var(--fs-xs);
   font-weight: 700;
+}
+.wz-counter-pill.at-limit {
+  background: #fef2f2;
+  color: var(--red);
+  border: 2px solid var(--red);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+.wz-counter-limit-tag {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 10px;
+}
+.wz-limit-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 2px solid rgba(220, 38, 38, 0.45);
+  color: #991b1b;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.45;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.12);
+}
+.wz-limit-banner.on {
+  background: #fff1f2;
+  border-color: var(--red);
+}
+.wz-limit-banner.flash {
+  animation: wz-limit-flash 0.65s ease;
+}
+.wz-limit-banner-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: 1px;
+}
+@keyframes wz-limit-flash {
+  0%, 100% { transform: scale(1); box-shadow: 0 4px 14px rgba(220, 38, 38, 0.12); }
+  35% { transform: scale(1.015); box-shadow: 0 6px 22px rgba(220, 38, 38, 0.28); }
 }
 
 /* ── Footer nav ── */
@@ -1208,8 +1273,6 @@ td input:focus, td select:focus {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 260px;
-  overflow-y: auto;
 }
 .wz-hardest-opt {
   display: flex;
@@ -1248,20 +1311,81 @@ td input:focus, td select:focus {
 .wz-text-prompts {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
+  margin-bottom: var(--ciap-space-1);
+}
+.wz-prompt-click-hint {
+  margin-top: 0;
   margin-bottom: var(--ciap-space-2);
+  font-size: var(--fs-xs);
+}
+.wz-prompt-tag {
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+button.wz-prompt-tag:hover {
+  border-color: var(--accent);
+  background: rgba(124, 58, 237, 0.08);
+  color: var(--accent);
+}
+button.wz-prompt-tag.used {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.45);
+}
+.task-hover-tip-wrap > button.wz-prompt-tag {
+  width: 100%;
 }
 .wz-prompt-tag {
   display: inline-flex;
   align-items: center;
-  height: 22px;
-  padding: 0 8px;
+  gap: 6px;
+  min-height: 22px;
+  height: auto;
+  padding: 4px 10px;
   border-radius: 999px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   font-size: var(--fs-xs);
   color: var(--ink-2);
   font-weight: 600;
+  line-height: 1.3;
+  max-width: 100%;
+}
+.task-hover-tip-wrap {
+  cursor: help;
+  outline: none;
+  display: inline-flex;
+}
+.task-hover-tip-wrap:has(> button) {
+  cursor: inherit;
+}
+.task-hover-tip-wrap:hover {
+  color: var(--accent);
+}
+.task-hover-tip-wrap.wz-chip,
+.task-hover-tip-wrap.wz-prompt-tag {
+  max-width: inherit;
+}
+.task-hover-tip {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 28px rgba(15, 23, 42, 0.18));
+  animation: task-tip-in 0.12s ease-out;
+}
+.task-hover-tip .tc {
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+.task-hover-tip .tc:hover {
+  transform: none;
+  box-shadow: none;
+}
+@keyframes task-tip-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ── Fluxos (passo 4) ── */

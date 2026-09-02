@@ -22,8 +22,9 @@ import { apiSend, apiGet } from "../api";
 import { ciapMotion, ciapStagger } from "../ciap-motion";
 import { BankDraggable, FlowTrack, reorderChain, type ChainEntry } from "../components/FlowTrack";
 import { TaskCard } from "../components/TaskCard";
+import { TaskHoverTip } from "../components/TaskHoverTip";
 import type { Question, StudyVersion, Task } from "../types";
-import { parseDynamicSettings } from "../lib/dynamicSettings";
+import { parseDynamicSettings, findTaskByPromptLabel, metodoDifficultyPromptLabels, METODO_TEXT_LONG_HELP, promptLineMarker, templateForStage, validatePromptLongText, type DynamicSettings } from "../lib/dynamicSettings";
 
 /* ─────────────────────────────────────────────
    Types
@@ -159,6 +160,29 @@ function Stepper({ step, maxReached, labels }: { step: number; maxReached: numbe
   );
 }
 
+function StepIntro({
+  title,
+  sub,
+  aside,
+  hint,
+}: {
+  title: string;
+  sub: string;
+  aside?: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="wz-section-hd">
+      <div className="wz-section-intro">
+        <h2 className="wz-title">{title}</h2>
+        {sub ? <p className="wz-sub">{sub}</p> : null}
+        {hint ? <p className="wz-hint">{hint}</p> : null}
+      </div>
+      {aside}
+    </div>
+  );
+}
+
 /* ─────────────────────────────────────────────
    PASSO 1 — Seleção por etapa (accordion)
 ───────────────────────────────────────────── */
@@ -191,6 +215,21 @@ function Step1({
 
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const [limitMsg, setLimitMsg] = useState<string | null>(null);
+  const [limitFlash, setLimitFlash] = useState(false);
+  const limitBannerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!limitMsg) return;
+    const t = window.setTimeout(() => setLimitMsg(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [limitMsg]);
+
+  const showLimitFeedback = (message: string) => {
+    setLimitMsg(message);
+    setLimitFlash(true);
+    window.setTimeout(() => setLimitFlash(false), 700);
+    limitBannerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
 
   const toggle = (k: string) =>
     setOpen((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
@@ -202,14 +241,14 @@ function Step1({
       return;
     }
     if (maxTotal != null && selected.length >= maxTotal) {
-      setLimitMsg(`Máximo de ${maxTotal} tarefa(s) no total neste passo.`);
+      showLimitFeedback(`Limite de ${maxTotal} tarefas atingido. Desmarque uma para selecionar outra.`);
       return;
     }
     if (maxPerGroup != null) {
       const etapa = t.etapa || "Sem etapa";
       const n = countSelectedInEtapa(tasks, selected, etapa);
       if (n >= maxPerGroup) {
-        setLimitMsg(`Máximo de ${maxPerGroup} tarefa(s) por grupo (${etapa}).`);
+        showLimitFeedback(`Limite de ${maxPerGroup} tarefa(s) por grupo (${etapa}). Desmarque uma para trocar.`);
         return;
       }
     }
@@ -219,20 +258,32 @@ function Step1({
 
   return (
     <div className="wz-body">
-      <div className="wz-section-hd">
-        <div className="wz-section-intro">
-          <h2 className="wz-title">{title}</h2>
-          <div className="wz-guidance" role="note">
-            <p>{sub}</p>
+      <StepIntro
+        title={title}
+        sub={sub}
+        aside={
+          <div className="wz-counter-pill">
+            {maxTotal != null
+              ? `${selected.length} / ${maxTotal} selecionada${selected.length !== 1 ? "s" : ""}`
+              : `${selected.length} selecionada${selected.length !== 1 ? "s" : ""}`}
+            {maxPerGroup != null && maxTotal == null && (
+              <span className="muted"> · máx. {maxPerGroup}/grupo</span>
+            )}
           </div>
+        }
+      />
+
+      {limitMsg && (
+        <div
+          ref={limitBannerRef}
+          className={`wz-limit-banner on${limitFlash ? " flash" : ""}`}
+          role="alert"
+          aria-live="assertive"
+        >
+          <span className="wz-limit-banner-icon" aria-hidden="true">!</span>
+          <span>{limitMsg}</span>
         </div>
-        <div className="wz-counter-pill">
-          {selected.length} selecionada{selected.length !== 1 ? "s" : ""}
-          {maxTotal != null && <span className="muted"> · máx. {maxTotal} no total</span>}
-          {maxPerGroup != null && maxTotal == null && <span className="muted"> · máx. {maxPerGroup}/grupo</span>}
-        </div>
-      </div>
-      {limitMsg && <p className="error" style={{ margin: "0 0 8px" }}>{limitMsg}</p>}
+      )}
 
       <div className="wz-accordion">
         {grouped.map(([etapa, etapaTasks], gi) => {
@@ -260,7 +311,7 @@ function Step1({
                 {!isOpen && selCount > 0 && (
                   <span className="wz-accord-chips">
                     {etapaTasks.filter((t) => selected.includes(t.id)).map((t) => (
-                      <span key={t.id} className="wz-chip">{formatTaskLabel(t)}</span>
+                      <TaskHoverTip key={t.id} task={t} className="wz-chip">{formatTaskLabel(t)}</TaskHoverTip>
                     ))}
                   </span>
                 )}
@@ -320,7 +371,9 @@ function SortableRankItem({
     >
       <span className="wz-rank-n">{rank}</span>
       <div className="wz-rank-card">
-        <span className="wz-rank-text">{formatTaskLabel(task)}</span>
+        <TaskHoverTip task={task}>
+          <span className="wz-rank-text">{formatTaskLabel(task)}</span>
+        </TaskHoverTip>
         <div className="wz-rank-meta">
           {task.etapa && <span className="wz-rank-meta-item">Etapa: <strong>{task.etapa}</strong></span>}
           {task.atividade && <span className="wz-rank-meta-item">Atividade: <strong>{task.atividade}</strong></span>}
@@ -358,15 +411,7 @@ function Step2({
 
   return (
     <div className="wz-body">
-      <div className="wz-section-hd">
-        <div className="wz-section-intro">
-          <h2 className="wz-title">{title}</h2>
-          <div className="wz-guidance wz-guidance-accent" role="note">
-            <p className="wz-guidance-lead">Avalie cada tarefa individualmente</p>
-            <p>{sub}</p>
-          </div>
-        </div>
-      </div>
+      <StepIntro title={title} sub={sub} />
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={orderedSelected} strategy={verticalListSortingStrategy}>
@@ -392,26 +437,102 @@ function Step2({
 /* ─────────────────────────────────────────────
    PASSO 3 — Perguntas conceituais
 ───────────────────────────────────────────── */
+const ESCOPO_TEXT_PROMPTS = [
+  "Objetivo geral",
+  "Objetivos específicos",
+  "Pessoas do serviço",
+  "Hipótese de ponto de partida",
+] as const;
+
+function buildPromptLine(label: string) {
+  return `${promptLineMarker(label)} `;
+}
+
+function PromptChip({
+  label, task, used, onInsert,
+}: {
+  label: string;
+  task?: Task;
+  used: boolean;
+  onInsert: (label: string) => void;
+}) {
+  const chip = (
+    <button
+      type="button"
+      className={`wz-prompt-tag wz-prompt-tag-btn${used ? " used" : ""}`}
+      onClick={() => onInsert(label)}
+      aria-pressed={used}
+    >
+      {label}
+    </button>
+  );
+
+  if (!task) return chip;
+  return <TaskHoverTip task={task}>{chip}</TaskHoverTip>;
+}
+
 function Step3({
-  qHardest, qText, hardestId, why, longText, selected, taskById, dispatch, invalidHardest, invalidText, title, sub,
+  qHardest, qText, hardestId, why, longText, orderedSelected, taskById, dispatch, invalidHardest, invalidText, title, sub, researchStage,
 }: {
   qHardest: Question | undefined;
   qText: Question | undefined;
   hardestId: string | null;
   why: string;
   longText: string;
-  selected: string[];
+  orderedSelected: string[];
   taskById: Map<string, Task>;
   dispatch: React.Dispatch<Action>;
   invalidHardest: boolean;
   invalidText: boolean;
   title: string;
   sub: string;
+  researchStage: "escopo" | "metodo";
 }) {
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+  const metodoPromptLabels = useMemo(
+    () => (researchStage === "metodo" ? metodoDifficultyPromptLabels(taskById, hardestId) : []),
+    [researchStage, taskById, hardestId],
+  );
+
+  const insertPromptLine = (label: string) => {
+    const line = buildPromptLine(label);
+    const marker = promptLineMarker(label);
+    const ta = textAreaRef.current;
+
+    if (longText.includes(marker)) {
+      const idx = longText.indexOf(marker);
+      const cursor = idx + line.length;
+      requestAnimationFrame(() => {
+        ta?.focus();
+        ta?.setSelectionRange(cursor, cursor);
+      });
+      return;
+    }
+
+    const needsBreak = longText.length > 0 && !longText.endsWith("\n");
+    const prefix = needsBreak ? "\n" : "";
+    const next = longText + prefix + line;
+
+    dispatch({ type: "SET_LONG_TEXT", text: next });
+    requestAnimationFrame(() => {
+      ta?.focus();
+      const cursor = next.length;
+      ta?.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const textPlaceholder =
+    researchStage === "metodo" && !metodoPromptLabels.length
+      ? "A tarefa mais difícil já foi comentada acima — não há outras nesta lista para repetir aqui."
+      : "Escreva livremente, abordando as tarefas acima…";
+
+  const textLongHelp =
+    researchStage === "metodo" ? METODO_TEXT_LONG_HELP : qText?.helpText;
+
   return (
     <div className="wz-body">
-      <h2 className="wz-title">{title}</h2>
-      <p className="wz-sub">{sub}</p>
+      <StepIntro title={title} sub={sub} />
 
       {/* 3.1 — hardest_critical */}
       {qHardest && (
@@ -419,7 +540,7 @@ function Step3({
           <div className="wz-q-label">{qHardest.title}</div>
           {qHardest.helpText && <p className="muted wz-q-help">{qHardest.helpText}</p>}
           <div className="wz-hardest-list">
-            {selected.map((id) => {
+            {orderedSelected.map((id) => {
               const t = taskById.get(id);
               if (!t) return null;
               return (
@@ -430,7 +551,7 @@ function Step3({
                     checked={hardestId === id}
                     onChange={() => dispatch({ type: "SET_HARDEST", id })}
                   />
-                  <span className="wz-hardest-text">{formatTaskLabel(t)}</span>
+                  <TaskHoverTip task={t} className="wz-hardest-text">{formatTaskLabel(t)}</TaskHoverTip>
                 </label>
               );
             })}
@@ -449,16 +570,53 @@ function Step3({
       {qText && (
         <motion.div className={`wz-q-block${invalidText ? " wz-invalid-pulse" : ""}`} {...ciapMotion.onboardingY8} transition={{ delay: 0.08 }}>
           <div className="wz-q-label">{qText.title}</div>
-          {qText.helpText && <p className="muted wz-q-help">{qText.helpText}</p>}
-          <div className="wz-text-prompts">
-            <span className="wz-prompt-tag">Objetivo geral</span>
-            <span className="wz-prompt-tag">Objetivos específicos</span>
-            <span className="wz-prompt-tag">Pessoas do serviço</span>
-            <span className="wz-prompt-tag">Hipótese de ponto de partida</span>
-          </div>
+          {textLongHelp && (researchStage !== "metodo" || metodoPromptLabels.length > 0) && (
+            <p className="muted wz-q-help">{textLongHelp}</p>
+          )}
+          {researchStage === "metodo" ? (
+            metodoPromptLabels.length > 0 ? (
+              <>
+                <div className="wz-text-prompts">
+                  {metodoPromptLabels.map((label) => (
+                    <PromptChip
+                      key={label}
+                      label={label}
+                      task={findTaskByPromptLabel(taskById, label) as Task | undefined}
+                      used={longText.includes(promptLineMarker(label))}
+                      onInsert={insertPromptLine}
+                    />
+                  ))}
+                </div>
+                <p className="muted wz-q-help wz-prompt-click-hint">
+                  Clique em um chip, se desejar, para copiar o nome da tarefa no campo abaixo.
+                </p>
+              </>
+            ) : (
+              <p className="wz-hint" style={{ marginBottom: "var(--ciap-space-2)" }}>
+                A tarefa mais difícil já foi comentada acima — não há outras nesta lista para repetir aqui.
+              </p>
+            )
+          ) : (
+            <>
+              <div className="wz-text-prompts">
+                {ESCOPO_TEXT_PROMPTS.map((label) => (
+                  <PromptChip
+                    key={label}
+                    label={label}
+                    used={longText.includes(promptLineMarker(label))}
+                    onInsert={insertPromptLine}
+                  />
+                ))}
+              </div>
+              <p className="muted wz-q-help wz-prompt-click-hint">
+                Clique em um chip, se desejar, para copiar o tópico no campo abaixo.
+              </p>
+            </>
+          )}
           <textarea
+            ref={textAreaRef}
             className="wz-textarea"
-            placeholder="Escreva livremente, abordando os tópicos acima…"
+            placeholder={textPlaceholder}
             value={longText}
             onChange={(e) => dispatch({ type: "SET_LONG_TEXT", text: e.target.value })}
             style={{ minHeight: 120 }}
@@ -584,13 +742,14 @@ function Step4({
 
   return (
     <div className="wz-body">
-      <div className="wz-section-hd">
-        <div>
-          <h2 className="wz-title">{title}</h2>
-          <p className="wz-sub">{sub} Ao menos {minFilledFlows} fluxo(s) deve(m) ser preenchido(s).</p>
-        </div>
-        <div className="wz-counter-pill">{visibleFlowCount} de {Math.min(top5.length, 5)}</div>
-      </div>
+      <StepIntro
+        title={title}
+        sub={sub}
+        hint={`Ao menos ${minFilledFlows} fluxo(s) deve(m) ser preenchido(s).`}
+        aside={
+          <div className="wz-counter-pill">{visibleFlowCount} de {Math.min(top5.length, 5)}</div>
+        }
+      />
 
       <DndContext
         sensors={sensors}
@@ -649,7 +808,9 @@ function Step4({
                 >
                   <div className="wz-flow-track-hd">
                     <span className="wz-flow-rank-badge">#{i + 1}</span>
-                    <span className="wz-flow-crit-name">{formatTaskLabel(crit)}</span>
+                    <TaskHoverTip task={crit}>
+                      <span className="wz-flow-crit-name">{formatTaskLabel(crit)}</span>
+                    </TaskHoverTip>
                     {crit.etapa && <span className="wz-flow-etapa">{crit.etapa}</span>}
                   </div>
 
@@ -752,8 +913,7 @@ function Step5({
 
   return (
     <div className="wz-body">
-      <h2 className="wz-title">{title}</h2>
-      <p className="wz-sub">{sub} Versão: <strong>{version.number}</strong></p>
+      <StepIntro title={title} sub={sub} hint={`Versão ${version.number}`} />
 
       {/* resumo seleção */}
       <div className="wz-review-block">
@@ -769,7 +929,9 @@ function Step5({
               <div key={id} className={`wz-review-rank-row${isTop ? " top5" : ""}`}>
                 <span className="wz-rank-n">{i + 1}</span>
                 {isTop && <span className="wz-top5-star">★</span>}
-                <span className="wz-rank-text">{t?.verb} {t?.textoPrincipal}</span>
+                <TaskHoverTip task={t}>
+                  <span className="wz-rank-text">{t?.verb} {t?.textoPrincipal}</span>
+                </TaskHoverTip>
               </div>
             );
           })}
@@ -792,17 +954,22 @@ function Step5({
             <div key={id} className="wz-review-flow">
               <div className="wz-review-flow-hd">
                 <span className="wz-flow-rank-badge">#{i + 1}</span>
-                <span className="wz-rank-text">{formatTaskLabel(t)}</span>
+                <TaskHoverTip task={t}>
+                  <span className="wz-rank-text">{formatTaskLabel(t)}</span>
+                </TaskHoverTip>
               </div>
               {chain.length === 0 ? (
                 <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>— nenhum passo adicionado</span>
               ) : (
                 <div className="wz-review-chips">
-                  {chain.map((e, si) => (
-                    <span key={e.id} className="wz-chip">
-                      {si + 1}. {formatTaskLabel(taskById.get(e.taskId))}
-                    </span>
-                  ))}
+                  {chain.map((e, si) => {
+                    const stepTask = taskById.get(e.taskId);
+                    return (
+                      <TaskHoverTip key={e.id} task={stepTask} className="wz-chip">
+                        {si + 1}. {formatTaskLabel(stepTask)}
+                      </TaskHoverTip>
+                    );
+                  })}
                 </div>
               )}
               {comment && (
@@ -820,7 +987,9 @@ function Step5({
         <div className="wz-review-block">
           <div className="wz-review-hd">{qHardest?.title ?? "Tarefa mais difícil"}</div>
           <p style={{ fontSize: "var(--fs-sm)", margin: 0 }}>
-            <strong>{formatTaskLabel(taskById.get(hardestId))}</strong>
+            <TaskHoverTip task={taskById.get(hardestId)}>
+              <strong>{formatTaskLabel(taskById.get(hardestId))}</strong>
+            </TaskHoverTip>
           </p>
           <p className="muted" style={{ fontSize: "var(--fs-sm)", margin: "4px 0 0" }}>{why}</p>
         </div>
@@ -922,10 +1091,24 @@ export function ParticipantPage() {
         let invalidHardest = false;
         let invalidText = false;
         if (qHardest?.required && (!state.hardestId || !state.why.trim())) invalidHardest = true;
-        if (qText?.required && !state.longText.trim()) invalidText = true;
+        if (qText?.required) {
+          const promptLabels =
+            dynamicSettings.researchStage === "metodo"
+              ? metodoDifficultyPromptLabels(taskById, state.hardestId)
+              : [...ESCOPO_TEXT_PROMPTS];
+          if (promptLabels.length === 0 && dynamicSettings.researchStage === "metodo") {
+            // Só a mais difícil se aplica — campo de baixo fica vazio de chips.
+          } else if (!validatePromptLongText(state.longText, promptLabels)) {
+            invalidText = true;
+          }
+        }
         if (invalidHardest || invalidText) {
           setInvalidStep3({ hardest: invalidHardest, text: invalidText });
-          setStepErr("Preencha os campos obrigatórios destacados em vermelho.");
+          setStepErr(
+            invalidText && state.longText.trim()
+              ? "Complete a explicação de cada tarefa — não basta só o nome inserido pelo chip."
+              : "Preencha os campos obrigatórios destacados em vermelho.",
+          );
           return;
         }
       }
@@ -1036,11 +1219,12 @@ export function ParticipantPage() {
             <Step3
               qHardest={qHardest} qText={qText}
               hardestId={state.hardestId} why={state.why} longText={state.longText}
-              selected={state.selected} taskById={taskById} dispatch={dispatch}
+              orderedSelected={state.orderedSelected} taskById={taskById} dispatch={dispatch}
               invalidHardest={invalidStep3.hardest}
               invalidText={invalidStep3.text}
               title={dynamicSettings.step3Title}
-              sub={dynamicSettings.step3Sub}
+              sub={templateForStage(dynamicSettings.researchStage).step3Sub}
+              researchStage={dynamicSettings.researchStage}
             />
           )}
           {state.step === 4 && (
