@@ -179,15 +179,44 @@ async function replaceDraftTasks(draftId: string, rows: ParsedTaskLine[]) {
 
 async function applyQuestionCopy(draftId: string, stage: ResearchStage) {
   const copy = stage === "metodo" ? METODO_QUESTION_COPY : ESCOPO_QUESTION_COPY;
+  const questionOrder = [
+    "critical_select",
+    "critical_rank",
+    "hardest_critical",
+    "text_long",
+    "flow_builder_per_critical",
+  ];
   const questions = await prisma.question.findMany({ where: { studyVersionId: draftId } });
+  const existingTypes = new Set(questions.map((question) => question.type));
   for (const q of questions) {
     const patch = copy[q.type];
     if (patch) {
       await prisma.question.update({
         where: { id: q.id },
-        data: { title: patch.title, helpText: patch.helpText },
+        data: {
+          title: patch.title,
+          helpText: patch.helpText,
+          required: true,
+          sortOrder: questionOrder.indexOf(q.type),
+        },
       });
     }
+  }
+
+  for (const [sortOrder, type] of questionOrder.entries()) {
+    if (existingTypes.has(type)) continue;
+    const patch = copy[type];
+    if (!patch) continue;
+    await prisma.question.create({
+      data: {
+        studyVersionId: draftId,
+        type,
+        title: patch.title,
+        helpText: patch.helpText,
+        required: true,
+        sortOrder,
+      },
+    });
   }
 }
 
