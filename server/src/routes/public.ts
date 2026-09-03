@@ -25,28 +25,39 @@ function parseVersionSettings(raw: string | undefined) {
   try {
     const parsed = raw
       ? (JSON.parse(raw) as {
+          researchStage?: string;
           minCriticalSelected?: number;
           minFilledFlows?: number;
           maxCriticalSelected?: number | null;
           maxCriticalPerGroup?: number | null;
         })
       : {};
+    const isMetodo = parsed.researchStage === "metodo";
     const maxCriticalPerGroup =
       parsed.maxCriticalPerGroup === null || parsed.maxCriticalPerGroup === undefined
         ? null
         : Math.max(1, Number(parsed.maxCriticalPerGroup) || 1);
     const maxCriticalSelected =
-      parsed.maxCriticalSelected === null || parsed.maxCriticalSelected === undefined
+      parsed.maxCriticalSelected === null
         ? null
+        : parsed.maxCriticalSelected === undefined
+        ? (isMetodo ? 10 : null)
         : Math.max(1, Number(parsed.maxCriticalSelected) || 1);
     return {
+      researchStage: isMetodo ? "metodo" as const : "escopo" as const,
       minCriticalSelected: Math.max(1, Number(parsed.minCriticalSelected ?? 1) || 1),
       minFilledFlows: Math.max(1, Number(parsed.minFilledFlows ?? 1) || 1),
       maxCriticalSelected,
       maxCriticalPerGroup,
     };
   } catch {
-    return { minCriticalSelected: 1, minFilledFlows: 1, maxCriticalSelected: null as number | null, maxCriticalPerGroup: null as number | null };
+    return {
+      researchStage: "escopo" as const,
+      minCriticalSelected: 1,
+      minFilledFlows: 1,
+      maxCriticalSelected: null as number | null,
+      maxCriticalPerGroup: null as number | null,
+    };
   }
 }
 
@@ -87,6 +98,53 @@ type AnswerIn = {
 
 function hasDuplicates(values: string[] | undefined) {
   return Array.isArray(values) && new Set(values).size !== values.length;
+}
+
+const METODO_DIFFICULTY_PROMPTS = [
+  "Estruturar tabela de screening",
+  "Definir perfis generalistas de indivíduos",
+  "Definir características e critérios",
+  "Definir tamanho da amostra",
+] as const;
+
+function normalizeTaskText(text: string) {
+  return text.trim().toLocaleLowerCase("pt-BR");
+}
+
+function taskPhraseKey(task: { verb: string; textoPrincipal: string }) {
+  return normalizeTaskText(`${task.verb ?? ""} ${task.textoPrincipal ?? ""}`);
+}
+
+function promptLineMarker(label: string) {
+  return `- ${label} -`;
+}
+
+function hasValidLongText(
+  text: string | undefined,
+  researchStage: "escopo" | "metodo",
+  hardestTaskId: string | undefined,
+  tasks: { id: string; verb: string; textoPrincipal: string }[],
+) {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return false;
+
+  if (researchStage !== "metodo") return trimmed.length >= 15;
+
+  const hardest = tasks.find((task) => task.id === hardestTaskId);
+  const hardestKey = hardest ? taskPhraseKey(hardest) : "";
+  const prompts = METODO_DIFFICULTY_PROMPTS.filter(
+    (label) => normalizeTaskText(label) !== hardestKey,
+  );
+  const usesMarkers = prompts.some((label) => trimmed.includes(promptLineMarker(label)));
+  if (!usesMarkers) return trimmed.length >= 15;
+
+  return prompts.every((label) => {
+    const marker = promptLineMarker(label);
+    return trimmed.split(/\r?\n/).some((line) => {
+      const markerIndex = line.indexOf(marker);
+      return markerIndex >= 0 && line.slice(markerIndex + marker.length).trim().length >= 3;
+    });
+  });
 }
 
 publicRouter.post("/responses", async (req, res) => {
@@ -141,8 +199,8 @@ publicRouter.post("/responses", async (req, res) => {
     }
 
     const taskRows = await prisma.task.findMany({
-      where: { studyVersionId },
-      select: { id: true, etapa: true },
+      where: { studyVersionId, inactive: false },
+      select: { id: true, etapa: true, verb: true, textoPrincipal: true },
     });
     const taskIds = new Set(taskRows.map((t) => t.id));
     const taskEtapa = new Map(taskRows.map((t) => [t.id, t.etapa || "Sem etapa"]));
@@ -163,12 +221,6 @@ publicRouter.post("/responses", async (req, res) => {
       if (q.type === "hardest_critical") {
         if (!a.taskId || !(a.why ?? "").trim()) {
           res.status(400).json({ error: "Preencha a tarefa mais difícil e o motivo" });
-          return;
-        }
-      }
-      if (q.type === "text_long") {
-        if (!(a.text ?? "").trim()) {
-          res.status(400).json({ error: "Texto obrigatório" });
           return;
         }
       }
@@ -230,6 +282,18 @@ publicRouter.post("/responses", async (req, res) => {
       return;
     }
 
+    const textQ = questions.find((q) => q.type === "text_long");
+    const textAns = answers.find((x) => x.questionId === textQ?.id);
+    if (
+      textQ?.required
+      && !hasValidLongText(textAns?.text, minima.researchStage, hardestAns?.taskId, taskRows)
+    ) {
+      res.status(400).json({
+        error: "Descreva as dificuldades com texto suficiente; não envie apenas os nomes das tarefas.",
+      });
+      return;
+    }
+
     if (implicitStep2Order?.length) {
       if (hasDuplicates(implicitStep2Order)) {
         res.status(400).json({ error: "Ordem do passo 2 contém cards duplicados" });
@@ -265,15 +329,21 @@ publicRouter.post("/responses", async (req, res) => {
         return;
       }
     }
+    if (
+      selectedSet.size > 0
+      && (orderedIds.length !== selectedSet.size || orderedIds.some((id) => !selectedSet.has(id)))
+    ) {
+      res.status(400).json({ error: "O ranking deve incluir exatamente todas as tarefas selecionadas" });
+      return;
+    }
     const top5Set = new Set(orderedIds.slice(0, 5));
 
     const flowQ = questions.find((q) => q.type === "flow_builder_per_critical");
     const flowAns = answers.find((x) => x.questionId === flowQ?.id);
     if (flowAns?.flows?.length) {
       for (const f of flowAns.flows) {
-        // só valida fluxos de críticas do top5 (ignora extra)
-        if (!top5Set.has(f.criticalTaskId) && !selectedSet.has(f.criticalTaskId)) {
-          res.status(400).json({ error: "Fluxos só podem usar críticas selecionadas" });
+        if (!top5Set.has(f.criticalTaskId)) {
+          res.status(400).json({ error: "Fluxos só podem ser enviados para tarefas do Top 5" });
           return;
         }
         if (hasDuplicates(f.stepTaskIds)) {

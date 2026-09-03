@@ -5,7 +5,15 @@ import { apiGet, downloadFile } from "../api";
 import { ciapMotion } from "../ciap-motion";
 
 const LS = "dinamica_admin_token";
-type Ver = { id: string; number: number; _count: { responses: number } };
+type Ver = { id: string; number: number; settingsJson?: string; _count: { responses: number } };
+
+function versionStage(version: Ver): "Escopo" | "Método" {
+  try {
+    return JSON.parse(version.settingsJson ?? "{}").researchStage === "metodo" ? "Método" : "Escopo";
+  } catch {
+    return "Escopo";
+  }
+}
 
 export function ExportPage() {
   const token = localStorage.getItem(LS) ?? "";
@@ -71,7 +79,7 @@ export function ExportPage() {
         <select value={versionId} onChange={(e) => setVersionId(e.target.value)} disabled={versions.length === 0}>
           {versions.map((v) => (
             <option key={v.id} value={v.id}>
-              v{v.number} — {v._count.responses} respostas
+              v{v.number} · {versionStage(v)} — {v._count.responses} respostas
             </option>
           ))}
         </select>
@@ -97,7 +105,7 @@ export function ExportPage() {
           <div>
             <strong>CSV</strong>
             <code style={{ display: "block", marginTop: 3, background: "#f4f4f0", padding: "4px 8px", borderRadius: 4 }}>
-              response_id, created_at, selected_task_ids, ranked_task_ids, hardest_task_id, hardest_why, long_texts_json, critical_task_id, flow_steps, flow_comment
+              response_id, created_at, participant_name, research_stage, selected_task_ids, ranked_task_ids, hardest_task_id, hardest_why, long_texts_json, critical_task_id, flow_steps, flow_comment
             </code>
           </div>
           <div>

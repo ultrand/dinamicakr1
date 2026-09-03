@@ -462,6 +462,12 @@ adminRouter.get("/export/csv", async (req, res) => {
     if (!versionId) { res.status(400).json({ error: "versionId obrigatório" }); return; }
     const version = await ensurePublishedVersion(versionId);
     if (!version) { res.status(404).json({ error: "Versão publicada inválida" }); return; }
+    let researchStage = "escopo";
+    try {
+      researchStage = JSON.parse(version.settingsJson ?? "{}").researchStage === "metodo" ? "metodo" : "escopo";
+    } catch {
+      // Versões legadas continuam identificadas como Escopo.
+    }
 
     const responses = await prisma.response.findMany({
       where: { studyVersionId: versionId },
@@ -480,6 +486,7 @@ adminRouter.get("/export/csv", async (req, res) => {
         "response_id",
         "created_at",
         "participant_name",
+        "research_stage",
         "selected_task_ids",
         "ranked_task_ids",
         "hardest_task_id",
@@ -505,6 +512,7 @@ adminRouter.get("/export/csv", async (req, res) => {
           r.id,
           r.createdAt.toISOString(),
           r.participantName,
+          researchStage,
           selected,
           ranked,
           r.criticalDifficulty?.taskId ?? "",
@@ -521,6 +529,7 @@ adminRouter.get("/export/csv", async (req, res) => {
             r.id,
             r.createdAt.toISOString(),
             r.participantName,
+            researchStage,
             selected,
             ranked,
             r.criticalDifficulty?.taskId ?? "",
@@ -549,6 +558,12 @@ adminRouter.get("/export/json", async (req, res) => {
     if (!versionId) { res.status(400).json({ error: "versionId obrigatório" }); return; }
     const version = await ensurePublishedVersion(versionId);
     if (!version) { res.status(404).json({ error: "Versão publicada inválida" }); return; }
+    let researchStage = "escopo";
+    try {
+      researchStage = JSON.parse(version.settingsJson ?? "{}").researchStage === "metodo" ? "metodo" : "escopo";
+    } catch {
+      // Versões legadas continuam identificadas como Escopo.
+    }
 
     const responses = await prisma.response.findMany({
       where: { studyVersionId: versionId },
@@ -566,6 +581,7 @@ adminRouter.get("/export/json", async (req, res) => {
       id: r.id,
       createdAt: r.createdAt,
       participantName: r.participantName,
+      researchStage,
       selectedCriticalTaskIds: r.criticalSelections.map((s) => s.taskId),
       orderedCriticalTaskIds: r.criticalRanks.map((x) => ({ taskId: x.taskId, position: x.position })),
       hardestTaskId: r.criticalDifficulty?.taskId ?? null,
@@ -671,6 +687,7 @@ adminRouter.get("/versions", async (_req, res) => {
         number: true,
         publishedAt: true,
         label: true,
+        settingsJson: true,
         _count: { select: { responses: true } },
       },
     });

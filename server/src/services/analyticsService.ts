@@ -34,6 +34,19 @@ function topTerms(texts: string[], n = 15): { term: string; count: number }[] {
 }
 
 export async function buildAnalytics(studyVersionId: string, filterCriticalTaskId?: string | null) {
+  const version = await prisma.studyVersion.findUnique({
+    where: { id: studyVersionId },
+    select: { settingsJson: true },
+  });
+  let researchStage: "escopo" | "metodo" = "escopo";
+  try {
+    researchStage = JSON.parse(version?.settingsJson ?? "{}").researchStage === "metodo"
+      ? "metodo"
+      : "escopo";
+  } catch {
+    // Versões legadas sem JSON válido permanecem como Escopo.
+  }
+
   const responseRows = await prisma.response.findMany({
     where: { studyVersionId },
     select: { id: true, createdAt: true, participantName: true },
@@ -258,6 +271,7 @@ export async function buildAnalytics(studyVersionId: string, filterCriticalTaskI
   })();
 
   return {
+    researchStage,
     /** Mediana do número de críticas marcadas por envio (passo 1). Usada no cliente para N do “ouro pesquisa”. */
     medianCriticalSelections,
     // existentes

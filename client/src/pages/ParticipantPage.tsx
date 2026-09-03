@@ -24,7 +24,7 @@ import { BankDraggable, FlowTrack, reorderChain, type ChainEntry } from "../comp
 import { TaskCard } from "../components/TaskCard";
 import { TaskHoverTip } from "../components/TaskHoverTip";
 import type { Question, StudyVersion, Task } from "../types";
-import { parseDynamicSettings, findTaskByPromptLabel, metodoDifficultyPromptLabels, METODO_TEXT_LONG_HELP, promptLineMarker, templateForStage, validatePromptLongText, type DynamicSettings } from "../lib/dynamicSettings";
+import { parseDynamicSettings, findTaskByPromptLabel, metodoDifficultyPromptLabels, METODO_TEXT_LONG_HELP, promptLineMarker, validatePromptLongText, type DynamicSettings } from "../lib/dynamicSettings";
 
 /* ─────────────────────────────────────────────
    Types
@@ -1223,7 +1223,7 @@ export function ParticipantPage() {
               invalidHardest={invalidStep3.hardest}
               invalidText={invalidStep3.text}
               title={dynamicSettings.step3Title}
-              sub={templateForStage(dynamicSettings.researchStage).step3Sub}
+              sub={dynamicSettings.step3Sub}
               researchStage={dynamicSettings.researchStage}
             />
           )}

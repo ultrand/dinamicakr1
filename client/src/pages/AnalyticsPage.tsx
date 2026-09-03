@@ -92,6 +92,7 @@ type ResponsesDetailPayload = {
 type GraphNode = { id: string; verb: string; textoPrincipal: string; etapa: string; atividade: string };
 
 type Analytics = {
+  researchStage?: "escopo" | "metodo";
   /** Mediana de críticas marcadas por envio (passo 1) — usada no Padrão Ouro pesquisa. */
   medianCriticalSelections?: number;
   criticalRanking: Rank[];
@@ -115,7 +116,23 @@ type Analytics = {
   flowPathStats?: { totalPathRows: number; withSteps: number; emptySteps: number };
   responses: ResponseIdentity[];
 };
-type Ver = { id: string; number: number; publishedAt: string | null; _count: { responses: number } };
+type Ver = {
+  id: string;
+  number: number;
+  publishedAt: string | null;
+  settingsJson?: string;
+  _count: { responses: number };
+};
+
+function versionStage(version: Ver | undefined): "escopo" | "metodo" {
+  try {
+    return JSON.parse(version?.settingsJson ?? "{}").researchStage === "metodo"
+      ? "metodo"
+      : "escopo";
+  } catch {
+    return "escopo";
+  }
+}
 
 function csvCell(value: unknown) {
   const raw = value == null ? "" : String(value);
@@ -358,6 +375,10 @@ export function AnalyticsPage() {
 
   const maxEdge = data?.graph.edges.length ? Math.max(...data.graph.edges.map((e) => e.weight)) : 1;
   const maxRank = (rows: { count: number }[]) => rows.length ? Math.max(...rows.map((r) => r.count)) : 1;
+  const selectedStage = data?.researchStage ?? versionStage(versions.find((v) => v.id === versionId));
+  const isMetodo = selectedStage === "metodo";
+  const taskTerm = isMetodo ? "tarefa relevante" : "tarefa crítica";
+  const taskTermPlural = isMetodo ? "tarefas relevantes" : "tarefas críticas";
 
   return (
     <motion.div className="page" {...ciapMotion.sectionFade}>
@@ -376,17 +397,28 @@ export function AnalyticsPage() {
       <div className="row" style={{ marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
         <div className="field">
           <label>Versão</label>
-          <select value={versionId} onChange={(e) => setVersionId(e.target.value)} style={{ width: 200 }} disabled={versions.length === 0}>
+          <select
+            value={versionId}
+            onChange={(e) => {
+              const nextId = e.target.value;
+              setVersionId(nextId);
+              if (versionStage(versions.find((v) => v.id === nextId)) === "metodo" && section === "padraoOuro") {
+                setSection("ranking");
+              }
+            }}
+            style={{ width: 200 }}
+            disabled={versions.length === 0}
+          >
             {versions.map((v) => (
               <option key={v.id} value={v.id}>
-                v{v.number} — {v._count.responses} resp.
+                v{v.number} · {versionStage(v) === "metodo" ? "Método" : "Escopo"} — {v._count.responses} resp.
               </option>
             ))}
           </select>
         </div>
         {section !== "respostas" && (
           <div className="field">
-            <label>Filtrar por crítica</label>
+            <label>Filtrar por {taskTerm}</label>
             <select value={critFilter} onChange={(e) => setCritFilter(e.target.value)} style={{ width: 260 }}>
               <option value="">Todas</option>
               {critChoices.map((c) => (
@@ -400,13 +432,13 @@ export function AnalyticsPage() {
 
       {critFilter && section !== "respostas" && (
         <CriticalFilterNotice
-          label={critChoices.find((c) => c.id === critFilter)?.label ?? "crítica selecionada"}
+          label={critChoices.find((c) => c.id === critFilter)?.label ?? `${taskTerm} selecionada`}
         />
       )}
 
       {/* sub-nav */}
       <div className="tabs" style={{ marginBottom: 12 }}>
-        {(["ranking", "fluxos", "grafo", "respostas", "padraoOuro"] as const).map((s) => (
+        {(["ranking", "fluxos", "grafo", "respostas", ...(isMetodo ? [] : ["padraoOuro"])] as const).map((s) => (
           <button key={s} type="button" className={`tab${section === s ? " active" : ""}`} onClick={() => setSection(s)}>
             {s === "ranking"
               ? "Ranking & Seleção"
@@ -445,7 +477,7 @@ export function AnalyticsPage() {
         <p className="muted">Carregando análise…</p>
       ) : data ? (
         <>
-          {section === "padraoOuro" && (
+          {section === "padraoOuro" && !isMetodo && (
             <PadraoOuroSection
               data={data as unknown as PadraoOuroAnalyticsInput}
               weights={goldWeights}
@@ -494,16 +526,16 @@ export function AnalyticsPage() {
               {/* linha 1 */}
               <div className="analytics-grid">
                 <div className="panel">
-                  <div className="panel-hd">Críticas mais selecionadas</div>
+                  <div className="panel-hd">{taskTermPlural.charAt(0).toUpperCase() + taskTermPlural.slice(1)} mais selecionadas</div>
                   <div className="panel-body">
                     <p className="analytics-lede muted" style={{ marginTop: 0 }}>
                       {data.criticalSelectionOrderedByRank ? (
                         <>
-                          Ordem <strong>1, 2, 3…</strong> = <strong>posição média no ranking</strong> entre as respostas (1 = mais prioritária no consenso). O número à direita continua sendo <strong>quantas vezes</strong> foi marcada como crítica na seleção.
+                          Ordem <strong>1, 2, 3…</strong> = <strong>posição média no ranking</strong> entre as respostas (1 = mais prioritária no consenso). O número à direita continua sendo <strong>quantas vezes</strong> foi marcada na seleção.
                         </>
                       ) : (
                         <>
-                          Ordenado por <strong>quantas vezes</strong> cada card foi marcado como crítico (ainda sem ranking gravado para ordenar de outro modo).
+                          Ordenado por <strong>quantas vezes</strong> cada card foi marcado na seleção (ainda sem ranking gravado para ordenar de outro modo).
                         </>
                       )}
                     </p>
@@ -591,7 +623,7 @@ export function AnalyticsPage() {
               </div>
 
               <div className="panel">
-                <div className="panel-hd">Palavras-chave: texto longo (dificuldades conceituais)</div>
+                <div className="panel-hd">Palavras-chave: texto longo ({isMetodo ? "dificuldades metodológicas" : "dificuldades conceituais"})</div>
                 <div className="panel-body">
                   <p className="analytics-lede muted" style={{ marginTop: 0 }}>
                     Mesma ideia, aplicada ao <strong>campo de texto longo</strong> do formulário.
@@ -605,7 +637,7 @@ export function AnalyticsPage() {
           {section === "fluxos" && (
             <div className="stack-s">
               <p className="analytics-lede muted" style={{ margin: "0 0 4px" }}>
-                <strong>Fluxos</strong> = sequência de cards que cada pessoa montou até uma <strong>tarefa crítica-alvo</strong> (passo do formulário). Não é mapa nem GPS.
+                <strong>Fluxos</strong> = sequência de cards que cada pessoa montou até uma <strong>{taskTerm}-alvo</strong> (passo do formulário). Não é mapa nem GPS.
               </p>
               <div className="analytics-grid">
                 <div className="panel">
